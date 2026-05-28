@@ -1,0 +1,25 @@
+{
+    "name": "scripter-keyboard-split",
+    "version": "0.1.0",
+    "description": "Dual-region MIDI keyboard split for Logic Pro / MainStage Scripter",
+    "type": "module",
+    "scripts": {
+        "test": "bun test",
+        "build": "bun run build.js"
+    },
+    "license": "MIT",
+    "author": "Michael Schürig <michael@schuerig.de>",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/mschuerig/scripter-keyboard-split.git"
+    },
+    "keywords": [
+        "midi",
+        "logic-pro",
+        "mainstage",
+        "scripter",
+        "hammond",
+        "organ",
+        "keyboard-split"
+    ]
+}
