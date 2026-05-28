@@ -2,17 +2,17 @@
 
 # scripter-keyboard-split
 
-A small **MainStage / Logic Pro Scripter plugin** that splits your MIDI
+A script for the **MainStage / Logic Pro Scripter plugin** that splits your MIDI
 keyboard between two MIDI channels — so you can play, for example, the
 upper and lower manual of a Hammond organ on one keyboard, with a split
 that doesn't get in the way of two-handed playing.
 
 ## Why you might want it
 
-The split built into the IK Multimedia Hammond plugin (and similar
-plugins) is limited: it draws one fixed line on the keyboard. If your
-right hand wanders down or your left hand reaches up, the split chops
-melodies in half and the wrong manual answers.
+- The split functionality built into some virtual instrument plugins is limited:
+  it draws one fixed line on the keyboard.
+- MainStage always sends splits to separate channel strips, even if they could 
+  and should be handled by a single plugin.
 
 This plugin offers two modes:
 
@@ -26,15 +26,18 @@ This plugin offers two modes:
 
 - **Logic Pro** or **MainStage** (any recent version that includes
   Scripter — i.e. Logic Pro 10+ / MainStage 3+).
-- A plugin or setup that can play different sounds on different MIDI
-  channels. Typical examples:
-    - The **IK Multimedia Hammond** plugin (route upper/lower manuals
+- A plugin on the same channel strip that can play different sounds
+  on different MIDI channels. (Scripter only sends MIDI down its own
+  channel strip — it can't route to a different track.) Typical
+  examples:
+    - The **IK Multimedia Hammond 3-BX** plugin (route upper/lower manuals
       by MIDI channel).
     - Native Instruments **Vintage Organs**, GG Audio **Blue3**, or any
       organ plugin with a channel-based split.
     - Two separate instrument tracks/channel strips, each set to
       receive on a different MIDI channel.
-    - A multi-timbral sampler with two parts.
+    - A multi-timbral sampler with two parts assigned to two MIDI
+      channels.
 
 ## Installation
 
@@ -80,16 +83,14 @@ running. Hover or click each control to adjust it.
 ## Setting up the receiving plugin
 
 The plugin just routes MIDI to two channels. You still need to tell
-your instrument(s) which sound goes on which channel.
+the receiving plugin which sound goes on which channel — and the
+plugin has to live on the same channel strip as Scripter, because
+Scripter only feeds MIDI into the plugins below it on its own strip.
 
 **For the IK Hammond / Vintage B3 / Blue3:** open the plugin's MIDI
 settings and set the upper manual to receive on channel `1` and the
 lower manual on channel `2` (or whatever channels you chose in the
 controls above).
-
-**For two separate plugin tracks:** put one instrument on each track,
-set each track's MIDI input to "MIDI channel 1" / "MIDI channel 2",
-and feed both from the channel strip carrying Scripter.
 
 **For a multi-timbral sampler:** assign the upper and lower sounds to
 the matching MIDI channels in the sampler's part list.
@@ -128,10 +129,13 @@ parameters say which channel each side is sent on; the instrument has
 to be listening to that exact channel.
 
 **A note hangs.**
+Quickest fix — send a MIDI panic:
+- **MainStage**: *Actions → Panic* (⌃P).
+- **Logic Pro**: see [Apple's guide](https://support.apple.com/en-us/guide/logicpro/lgcpc412346d/mac).
+
 The script tracks every Note On so the matching Note Off goes to the
-same channel even if the split moves. If a note still hangs (rare —
-usually only if the script was started while a key was already held),
-toggle **Run Script** off and on, or play and release that note again.
+same channel even if the split moves. Hangs are rare — usually only
+if the script was started while a key was already held.
 
 **Notes occasionally jump to the wrong side in Floating mode.**
 Try a smaller Floating Range — the larger the range, the more the

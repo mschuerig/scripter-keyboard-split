@@ -2,19 +2,19 @@
 
 # scripter-keyboard-split
 
-Ein kleines **Scripter-Plug-in für MainStage und Logic Pro**, das deine
-MIDI-Tastatur auf zwei MIDI-Kanäle aufteilt — damit du z.B. das obere
-und das untere Manual einer Hammond-Orgel auf einer einzigen Tastatur
-spielen kannst, ohne dass dir der Splitpunkt beim zweihändigen Spiel
-in die Quere kommt.
+Ein Skript für das **Scripter-Plug-in von MainStage / Logic Pro**, das
+deine MIDI-Tastatur auf zwei MIDI-Kanäle aufteilt — damit du z.B. das
+obere und das untere Manual einer Hammond-Orgel auf einer einzigen
+Tastatur spielen kannst, ohne dass dir der Splitpunkt beim zweihändigen
+Spiel in die Quere kommt.
 
 ## Warum das nützlich ist
 
-Der eingebaute Split des IK-Multimedia-Hammond-Plug-ins (und ähnlicher
-Plug-ins) ist eingeschränkt: Er zieht eine starre Linie über die
-Tastatur. Sobald deine rechte Hand kurz nach unten wandert oder deine
-linke Hand nach oben greift, zerschneidet der Split die Phrase und das
-falsche Manual antwortet.
+- Die Split-Funktion mancher virtueller Instrumenten-Plug-ins ist
+  eingeschränkt: Sie zieht eine starre Linie über die Tastatur.
+- MainStage schickt Splits immer auf separate Channel-Strips, auch
+  wenn ein einzelnes Plug-in das genauso gut (oder besser) erledigen
+  könnte.
 
 Dieses Plug-in bietet zwei Modi:
 
@@ -28,15 +28,18 @@ Dieses Plug-in bietet zwei Modi:
 
 - **Logic Pro** oder **MainStage** in einer halbwegs aktuellen Version
   (Logic Pro 10+ / MainStage 3+, also mit Scripter).
-- Ein Plug-in oder Setup, das verschiedene Klänge auf verschiedenen
-  MIDI-Kanälen spielen kann. Typische Beispiele:
-    - Das **IK-Multimedia-Hammond**-Plug-in (Obermanual und
+- Ein Plug-in auf demselben Channel-Strip, das verschiedene Klänge
+  auf verschiedenen MIDI-Kanälen spielen kann. (Scripter schickt MIDI
+  nur den eigenen Channel-Strip hinunter — es kann keine andere Spur
+  ansprechen.) Typische Beispiele:
+    - Das **IK Multimedia Hammond 3-BX**-Plug-in (Obermanual und
       Untermanual werden über MIDI-Kanäle angesprochen).
     - Native Instruments **Vintage Organs**, GG Audio **Blue3** oder
       eine andere Orgel mit kanalbasiertem Split.
     - Zwei separate Instrumenten-Spuren, jede mit einem eigenen
       MIDI-Empfangskanal.
-    - Ein multitimbraler Sampler mit zwei Parts.
+    - Ein multitimbraler Sampler mit zwei Parts, die zwei MIDI-Kanälen
+      zugewiesen sind.
 
 ## Installation
 
@@ -83,18 +86,16 @@ Skript läuft.
 
 ## Empfänger-Plug-in einrichten
 
-Das Plug-in leitet das MIDI nur auf zwei Kanäle. Dein Instrument muss
-selbst wissen, welcher Klang auf welchem Kanal antworten soll.
+Das Plug-in leitet das MIDI nur auf zwei Kanäle. Du musst dem
+Empfänger-Plug-in noch sagen, welcher Klang auf welchem Kanal
+antworten soll — und das Plug-in muss auf demselben Channel-Strip wie
+Scripter liegen, weil Scripter das MIDI nur in die Plug-ins darunter
+auf seinem eigenen Strip einspeist.
 
 **Für IK Hammond / Vintage B3 / Blue3:** Öffne die MIDI-Einstellungen
 des Plug-ins und stelle das Obermanual auf MIDI-Kanal `1`, das
 Untermanual auf Kanal `2` (bzw. die Kanäle, die du oben eingestellt
 hast).
-
-**Für zwei separate Plug-in-Spuren:** Lege je ein Instrument auf jede
-Spur, setze den MIDI-Empfangskanal jeder Spur auf "MIDI-Kanal 1" bzw.
-"MIDI-Kanal 2" und schicke beide Spuren das MIDI vom Channel-Strip
-mit Scripter.
 
 **Für einen multitimbralen Sampler:** Ordne in der Part-Liste des
 Samplers den oberen und unteren Klang den passenden MIDI-Kanälen zu.
@@ -134,13 +135,15 @@ Scripter-Parametern siehst du, auf welchen Kanal jede Seite sendet —
 das Instrument muss genau auf diesen Kanal hören.
 
 **Eine Note hängt.**
+Schnellste Hilfe — ein MIDI-Panic:
+- **MainStage**: *Aktionen → Panik* (⌃P).
+- **Logic Pro**: siehe [Anleitung von Apple](https://support.apple.com/de-de/guide/logicpro/lgcpc412346d/mac).
+
 Das Skript merkt sich, auf welchen Kanal jedes Note On ging, damit das
-zugehörige Note Off auf dem gleichen Kanal ankommt — selbst wenn du
-zwischendurch den Split veränderst. Sollte trotzdem mal eine Note
-hängen bleiben (selten — meistens nur, wenn das Skript gestartet
-wurde, während eine Taste gerade gedrückt war), **Run Script** kurz
-aus- und wieder einschalten oder die Note erneut anschlagen und
-loslassen.
+zugehörige Note Off auf demselben Kanal ankommt — selbst wenn du
+zwischendurch den Split veränderst. Hängende Noten sind selten und
+treten meist nur dann auf, wenn das Skript gestartet wurde, während
+eine Taste gerade gedrückt war.
 
 **Im Floating-Modus springen Noten manchmal auf die falsche Seite.**
 Probier eine kleinere Floating Range. Je größer der Bereich, desto

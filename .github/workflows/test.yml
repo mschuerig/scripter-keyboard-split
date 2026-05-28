@@ -9,6 +9,11 @@ jobs:
     test:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: oven-sh/setup-bun@v2
-            - run: bun test
+            - name: Run tests
+              run: bun test
+            - name: Rebuild Scripter file
+              run: bun run build
+            - name: Verify committed scripter-keyboard-split.js matches build output
+              run: git diff --exit-code scripter-keyboard-split.js
