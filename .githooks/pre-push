@@ -1,0 +1,47 @@
+#!/bin/sh
+# Require a package.json version bump when source files change on main.
+# Enable with: git config core.hooksPath .githooks
+
+set -eu
+
+zero="0000000000000000000000000000000000000000"
+
+# Files whose changes require a version bump.
+source_pattern='^(split-router\.js|scripter-keyboard-split\.template\.js|scripter-keyboard-split\.js|build\.js)$'
+
+read_version() {
+    git show "$1:package.json" 2>/dev/null \
+        | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        | head -n1
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+    case "$remote_ref" in
+        refs/heads/main) ;;
+        *) continue ;;
+    esac
+    [ "$remote_sha" = "$zero" ] && continue
+
+    changed=$(git diff --name-only "$remote_sha" "$local_sha")
+    source_changed=$(printf '%s\n' "$changed" | grep -E "$source_pattern" || true)
+    [ -z "$source_changed" ] && continue
+
+    old_version=$(read_version "$remote_sha")
+    new_version=$(read_version "$local_sha")
+
+    if [ -z "$new_version" ]; then
+        echo "pre-push: could not read version from package.json at $local_sha" >&2
+        exit 1
+    fi
+
+    if [ "$old_version" = "$new_version" ]; then
+        echo "pre-push: source files changed but version is still $new_version." >&2
+        echo "  Bump \"version\" in package.json and commit before pushing." >&2
+        echo "  Changed source files:" >&2
+        printf '    %s\n' $source_changed >&2
+        exit 1
+    fi
+done
+
+exit 0
