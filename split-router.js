@@ -1,11 +1,11 @@
 /**
- * N-region keyboard split router.
+ * N-zone keyboard split router.
  *
- * Takes pre-computed claim zones for each region as two parallel
+ * Takes pre-computed claim zones for each zone as two parallel
  * arrays of length N+1:
  *
- *   lowerBounds[k] = lowest pitch region k can claim
- *   upperBounds[k] = highest pitch region k can claim
+ *   lowerBounds[k] = lowest pitch zone k can claim
+ *   upperBounds[k] = highest pitch zone k can claim
  *
  * with `lowerBounds[0] = -Infinity` and `upperBounds[N] = +Infinity`
  * for the unbounded outer edges. The Scripter wrapper computes these
@@ -17,30 +17,30 @@
  * Setting both ranges of a split to 0 collapses it into a hard line —
  * the two adjacent claim zones meet only at the split point.
  *
- * When a pitch falls inside a region's claim zone, the region is a
+ * When a pitch falls inside a zone's claim zone, the zone is a
  * candidate. The choice among multiple candidates:
  *
- *   1. If there is a previous-note region (prevRegion ≥ 0) and it is
+ *   1. If there is a previous-note zone (prevZone ≥ 0) and it is
  *      among the candidates, it keeps the note UNLESS another
  *      candidate's last-played pitch is more than STAY_BUFFER
  *      semitones closer than prev's. This follow-the-hand bias keeps
- *      a melody continuing through the active region from being
+ *      a melody continuing through the active zone from being
  *      yanked across by a stale or coincidental match in another
- *      region, while still letting a clearly-closer other hand
+ *      zone, while still letting a clearly-closer other hand
  *      reclaim the note.
  *   2. Otherwise the candidate whose last-played pitch is closest in
- *      semitones wins; regions with no last pitch are treated as
- *      infinitely far; ties go to the higher region index.
+ *      semitones wins; zones with no last pitch are treated as
+ *      infinitely far; ties go to the higher zone index.
  *
  * Caller responsibilities:
  *   - lowerBounds and upperBounds must be aligned (same length, same
- *     region order). The Scripter wrapper guarantees this.
+ *     zone order). The Scripter wrapper guarantees this.
  *   - lastPitches is mutated in place: lastPitches[chosen] = pitch.
- *   - prevRegion tracks the region returned by the most recent call,
+ *   - prevZone tracks the zone returned by the most recent call,
  *     or -1 if there has been none. The caller stores the return
  *     value and passes it back next time.
  *
- * Returns the chosen region index.
+ * Returns the chosen zone index.
  *
  * Hot-path discipline: this function makes no heap allocations — it
  * uses only primitive locals and reads/writes existing arrays in
@@ -53,29 +53,29 @@
 
 var STAY_BUFFER = 2;
 
-export function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegion) {
-    var numRegions = lowerBounds.length;
+export function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevZone) {
+    var numZones = lowerBounds.length;
 
     var candidateCount = 0;
     var soleCandidate = -1;
     var prevIsCandidate = false;
-    var bestRegion = -1;
+    var bestZone = -1;
     var bestDist = Infinity;
 
-    for (var k = 0; k < numRegions; k++) {
+    for (var k = 0; k < numZones; k++) {
         if (pitch < lowerBounds[k] || pitch > upperBounds[k]) continue;
 
         candidateCount++;
         soleCandidate = k;
-        if (k === prevRegion) prevIsCandidate = true;
+        if (k === prevZone) prevIsCandidate = true;
 
         var lp = lastPitches[k];
         var dist = (lp !== null && lp !== undefined)
             ? Math.abs(pitch - lp)
             : Infinity;
         // Ascending iteration; `<=` sends ties to the higher index.
-        if (bestRegion === -1 || dist <= bestDist) {
-            bestRegion = k;
+        if (bestZone === -1 || dist <= bestDist) {
+            bestZone = k;
             bestDist = dist;
         }
     }
@@ -84,13 +84,13 @@ export function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegi
     if (candidateCount === 1) {
         chosen = soleCandidate;
     } else if (prevIsCandidate) {
-        var prevPitch = lastPitches[prevRegion];
+        var prevPitch = lastPitches[prevZone];
         var prevDist = (prevPitch !== null && prevPitch !== undefined)
             ? Math.abs(pitch - prevPitch)
             : Infinity;
-        chosen = bestDist + STAY_BUFFER < prevDist ? bestRegion : prevRegion;
+        chosen = bestDist + STAY_BUFFER < prevDist ? bestZone : prevZone;
     } else {
-        chosen = bestRegion;
+        chosen = bestZone;
     }
 
     lastPitches[chosen] = pitch;
@@ -105,10 +105,10 @@ export function transposeByOctaves(pitch, octaves) {
 }
 
 /**
- * Route a NoteOn: pick a region, set the event's channel and
+ * Route a NoteOn: pick a zone, set the event's channel and
  * (possibly transposed) pitch, and remember both per controller
  * pitch so the matching NoteOff can mirror them. Returns the chosen
- * region index — the caller stores this as the new prevRegion.
+ * zone index — the caller stores this as the new prevZone.
  *
  * Tracking both channel AND output pitch is what stops transposed
  * notes from hanging: a NoteOn sent at the transposed pitch must
@@ -117,11 +117,11 @@ export function transposeByOctaves(pitch, octaves) {
  *
  * Mutates event.pitch, event.channel, noteToChannel, noteToPitch.
  */
-export function routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch) {
+export function routeNoteOn(event, cache, lastPitches, prevZone, noteToChannel, noteToPitch) {
     var originalPitch = event.pitch;
-    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevRegion);
-    var ch = cache.regionChannels[idx];
-    var outPitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
+    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevZone);
+    var ch = cache.zoneChannels[idx];
+    var outPitch = transposeByOctaves(originalPitch, cache.zoneTransposes[idx]);
     event.pitch = outPitch;
     event.channel = ch;
     noteToChannel[originalPitch] = ch;

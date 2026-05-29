@@ -1,25 +1,30 @@
 /**
  * scripter-keyboard-split — MainStage / Logic Pro Scripter plugin
  *
+ * Version: 0.1.0
+ * This version: https://github.com/mschuerig/scripter-keyboard-split/blob/v0.1.0/scripter-keyboard-split.js
+ * Latest version: https://github.com/mschuerig/scripter-keyboard-split/blob/main/scripter-keyboard-split.js
+ * Project home: https://github.com/mschuerig/scripter-keyboard-split
+ *
  * Splits the keyboard between up to MAX_SPLITS + 1 MIDI channels.
  * Each split has Floating Range Above / Below knobs that govern how
- * far the adjacent regions extend past the split. Set both ranges of
+ * far the adjacent zones extend past the split. Set both ranges of
  * a split to 0 for a hard, fixed boundary; nonzero ranges let each
- * region claim a band of pitches past the split and hold onto notes
+ * zone claim a band of pitches past the split and hold onto notes
  * that briefly cross over.
  *
- * Region 1 is the highest region of the keyboard — typically the
- * upper manual or the right-hand melody — and Region N+1 the lowest.
- * Split Point i is the boundary between Region i and Region i+1.
- * The parameter list reads top-of-keyboard at the top — Region 1,
- * Split 1, Region 2, Split 2, … — so adjusting Number of Splits
+ * Zone 1 is the highest zone of the keyboard — typically the
+ * upper manual or the right-hand melody — and Zone N+1 the lowest.
+ * Split Point i is the boundary between Zone i and Zone i+1.
+ * The parameter list reads top-of-keyboard at the top — Zone 1,
+ * Split 1, Zone 2, Split 2, … — so adjusting Number of Splits
  * reveals or hides rows at the bottom of the list (= bottom of the
  * keyboard) without shifting the rest.
  *
  * Hot-path discipline: HandleMIDI reads only the pre-computed
  * cache. rebuildCache is the only function that mutates routing
  * state, and it does so in place — sorting via scratch arrays
- * allocated once at script load, and computing per-region claim
+ * allocated once at script load, and computing per-zone claim
  * bounds (cache.lowerBounds / cache.upperBounds) so the router
  * doesn't have to do any arithmetic per event.
  *
@@ -29,17 +34,17 @@
  */
 
 var MAX_SPLITS = 3;
-var MAX_REGIONS = MAX_SPLITS + 1;
+var MAX_ZONES = MAX_SPLITS + 1;
 
 var DEFAULT_NUM_SPLITS = 1;
 var DEFAULT_SPLIT_POINT = 60;
 var DEFAULT_RANGE_ABOVE = 3;
 var DEFAULT_RANGE_BELOW = 3;
-// Region channels default to R_i = i. Region 1 is the topmost region
+// Zone channels default to R_i = i. Zone 1 is the topmost zone
 // (typically the upper manual or the main melody hand on a Hammond)
 // and conventionally lives on MIDI channel 1.
-var DEFAULT_REGION_CHANNELS = [null, 1, 2, 3, 4];
-var DEFAULT_REGION_TRANSPOSE = 0;
+var DEFAULT_ZONE_CHANNELS = [null, 1, 2, 3, 4];
+var DEFAULT_ZONE_TRANSPOSE = 0;
 
 var PluginParameters = [];
 // Parallel array of dispatch metadata. Index aligns with PluginParameters.
@@ -59,8 +64,8 @@ var NUM_SPLITS_LABELS = [];
 for (var i = 1; i <= MAX_SPLITS; i++) {
     NUM_SPLITS_LABELS.push(
         i === 1
-            ? "1 split (2 regions)"
-            : i + " splits (" + (i + 1) + " regions)"
+            ? "1 split (2 zones)"
+            : i + " splits (" + (i + 1) + " zones)"
     );
 }
 addParam({
@@ -70,23 +75,23 @@ addParam({
     defaultValue: DEFAULT_NUM_SPLITS - 1
 }, { kind: "numSplits" });
 
-for (var slot = 1; slot <= MAX_REGIONS; slot++) {
+for (var slot = 1; slot <= MAX_ZONES; slot++) {
     addParam({
-        name: "Region " + slot + " Channel",
+        name: "Zone " + slot + " Channel",
         type: "lin",
         minValue: 1,
         maxValue: 16,
         numberOfSteps: 15,
-        defaultValue: DEFAULT_REGION_CHANNELS[slot]
-    }, { kind: "channel", regionIndex: slot });
+        defaultValue: DEFAULT_ZONE_CHANNELS[slot]
+    }, { kind: "channel", zoneIndex: slot });
     addParam({
-        name: "Region " + slot + " Transpose",
+        name: "Zone " + slot + " Transpose",
         type: "lin",
         minValue: -4,
         maxValue: 4,
         numberOfSteps: 8,
-        defaultValue: DEFAULT_REGION_TRANSPOSE
-    }, { kind: "transpose", regionIndex: slot });
+        defaultValue: DEFAULT_ZONE_TRANSPOSE
+    }, { kind: "transpose", zoneIndex: slot });
     if (slot <= MAX_SPLITS) {
         addParam({
             name: "Split Point " + slot,
@@ -115,7 +120,7 @@ for (var slot = 1; slot <= MAX_REGIONS; slot++) {
     }
 }
 
-// Raw parameter values keyed by 1-based split / region index. Initialised
+// Raw parameter values keyed by 1-based split / zone index. Initialised
 // from defaults so the cache is valid before any ParameterChanged fires.
 var rawSplitPoints = [null];
 var rawRangeAbove = [null];
@@ -125,10 +130,10 @@ for (var i = 1; i <= MAX_SPLITS; i++) {
     rawRangeAbove.push(DEFAULT_RANGE_ABOVE);
     rawRangeBelow.push(DEFAULT_RANGE_BELOW);
 }
-var rawRegionChannels = DEFAULT_REGION_CHANNELS.slice();
-var rawRegionTransposes = [null];
-for (var i = 1; i <= MAX_REGIONS; i++) {
-    rawRegionTransposes.push(DEFAULT_REGION_TRANSPOSE);
+var rawZoneChannels = DEFAULT_ZONE_CHANNELS.slice();
+var rawZoneTransposes = [null];
+for (var i = 1; i <= MAX_ZONES; i++) {
+    rawZoneTransposes.push(DEFAULT_ZONE_TRANSPOSE);
 }
 
 // Cache derived from raw values. HandleMIDI reads only this object.
@@ -137,8 +142,8 @@ var cache = {
     numSplits: DEFAULT_NUM_SPLITS,
     lowerBounds: [],
     upperBounds: [],
-    regionChannels: [],
-    regionTransposes: [],
+    zoneChannels: [],
+    zoneTransposes: [],
     failsafeChannels: []
 };
 
@@ -148,9 +153,9 @@ var sortPts = new Array(MAX_SPLITS);
 var sortAbove = new Array(MAX_SPLITS);
 var sortBelow = new Array(MAX_SPLITS);
 
-var lastPitches = new Array(MAX_REGIONS);
-for (var i = 0; i < MAX_REGIONS; i++) lastPitches[i] = null;
-var prevRegion = -1;
+var lastPitches = new Array(MAX_ZONES);
+for (var i = 0; i < MAX_ZONES; i++) lastPitches[i] = null;
+var prevZone = -1;
 
 // Parallel sparse arrays keyed by the controller's NoteOn pitch.
 // On NoteOff we look up both the output channel and the (possibly
@@ -165,13 +170,13 @@ for (var i = 0; i < 128; i++) {
 
 // @inject:split-router
 /**
- * N-region keyboard split router.
+ * N-zone keyboard split router.
  *
- * Takes pre-computed claim zones for each region as two parallel
+ * Takes pre-computed claim zones for each zone as two parallel
  * arrays of length N+1:
  *
- *   lowerBounds[k] = lowest pitch region k can claim
- *   upperBounds[k] = highest pitch region k can claim
+ *   lowerBounds[k] = lowest pitch zone k can claim
+ *   upperBounds[k] = highest pitch zone k can claim
  *
  * with `lowerBounds[0] = -Infinity` and `upperBounds[N] = +Infinity`
  * for the unbounded outer edges. The Scripter wrapper computes these
@@ -183,30 +188,30 @@ for (var i = 0; i < 128; i++) {
  * Setting both ranges of a split to 0 collapses it into a hard line —
  * the two adjacent claim zones meet only at the split point.
  *
- * When a pitch falls inside a region's claim zone, the region is a
+ * When a pitch falls inside a zone's claim zone, the zone is a
  * candidate. The choice among multiple candidates:
  *
- *   1. If there is a previous-note region (prevRegion ≥ 0) and it is
+ *   1. If there is a previous-note zone (prevZone ≥ 0) and it is
  *      among the candidates, it keeps the note UNLESS another
  *      candidate's last-played pitch is more than STAY_BUFFER
  *      semitones closer than prev's. This follow-the-hand bias keeps
- *      a melody continuing through the active region from being
+ *      a melody continuing through the active zone from being
  *      yanked across by a stale or coincidental match in another
- *      region, while still letting a clearly-closer other hand
+ *      zone, while still letting a clearly-closer other hand
  *      reclaim the note.
  *   2. Otherwise the candidate whose last-played pitch is closest in
- *      semitones wins; regions with no last pitch are treated as
- *      infinitely far; ties go to the higher region index.
+ *      semitones wins; zones with no last pitch are treated as
+ *      infinitely far; ties go to the higher zone index.
  *
  * Caller responsibilities:
  *   - lowerBounds and upperBounds must be aligned (same length, same
- *     region order). The Scripter wrapper guarantees this.
+ *     zone order). The Scripter wrapper guarantees this.
  *   - lastPitches is mutated in place: lastPitches[chosen] = pitch.
- *   - prevRegion tracks the region returned by the most recent call,
+ *   - prevZone tracks the zone returned by the most recent call,
  *     or -1 if there has been none. The caller stores the return
  *     value and passes it back next time.
  *
- * Returns the chosen region index.
+ * Returns the chosen zone index.
  *
  * Hot-path discipline: this function makes no heap allocations — it
  * uses only primitive locals and reads/writes existing arrays in
@@ -219,29 +224,29 @@ for (var i = 0; i < 128; i++) {
 
 var STAY_BUFFER = 2;
 
-function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegion) {
-    var numRegions = lowerBounds.length;
+function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevZone) {
+    var numZones = lowerBounds.length;
 
     var candidateCount = 0;
     var soleCandidate = -1;
     var prevIsCandidate = false;
-    var bestRegion = -1;
+    var bestZone = -1;
     var bestDist = Infinity;
 
-    for (var k = 0; k < numRegions; k++) {
+    for (var k = 0; k < numZones; k++) {
         if (pitch < lowerBounds[k] || pitch > upperBounds[k]) continue;
 
         candidateCount++;
         soleCandidate = k;
-        if (k === prevRegion) prevIsCandidate = true;
+        if (k === prevZone) prevIsCandidate = true;
 
         var lp = lastPitches[k];
         var dist = (lp !== null && lp !== undefined)
             ? Math.abs(pitch - lp)
             : Infinity;
         // Ascending iteration; `<=` sends ties to the higher index.
-        if (bestRegion === -1 || dist <= bestDist) {
-            bestRegion = k;
+        if (bestZone === -1 || dist <= bestDist) {
+            bestZone = k;
             bestDist = dist;
         }
     }
@@ -250,13 +255,13 @@ function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegion) {
     if (candidateCount === 1) {
         chosen = soleCandidate;
     } else if (prevIsCandidate) {
-        var prevPitch = lastPitches[prevRegion];
+        var prevPitch = lastPitches[prevZone];
         var prevDist = (prevPitch !== null && prevPitch !== undefined)
             ? Math.abs(pitch - prevPitch)
             : Infinity;
-        chosen = bestDist + STAY_BUFFER < prevDist ? bestRegion : prevRegion;
+        chosen = bestDist + STAY_BUFFER < prevDist ? bestZone : prevZone;
     } else {
-        chosen = bestRegion;
+        chosen = bestZone;
     }
 
     lastPitches[chosen] = pitch;
@@ -271,10 +276,10 @@ function transposeByOctaves(pitch, octaves) {
 }
 
 /**
- * Route a NoteOn: pick a region, set the event's channel and
+ * Route a NoteOn: pick a zone, set the event's channel and
  * (possibly transposed) pitch, and remember both per controller
  * pitch so the matching NoteOff can mirror them. Returns the chosen
- * region index — the caller stores this as the new prevRegion.
+ * zone index — the caller stores this as the new prevZone.
  *
  * Tracking both channel AND output pitch is what stops transposed
  * notes from hanging: a NoteOn sent at the transposed pitch must
@@ -283,11 +288,11 @@ function transposeByOctaves(pitch, octaves) {
  *
  * Mutates event.pitch, event.channel, noteToChannel, noteToPitch.
  */
-function routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch) {
+function routeNoteOn(event, cache, lastPitches, prevZone, noteToChannel, noteToPitch) {
     var originalPitch = event.pitch;
-    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevRegion);
-    var ch = cache.regionChannels[idx];
-    var outPitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
+    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevZone);
+    var ch = cache.zoneChannels[idx];
+    var outPitch = transposeByOctaves(originalPitch, cache.zoneTransposes[idx]);
     event.pitch = outPitch;
     event.channel = ch;
     noteToChannel[originalPitch] = ch;
@@ -316,7 +321,7 @@ function routeNoteOff(event, noteToChannel, noteToPitch) {
 
 function rebuildCache() {
     var N = cache.numSplits;
-    var numRegions = N + 1;
+    var numZones = N + 1;
 
     // Copy active raw values into scratch, then insertion-sort
     // splitPoints ascending while carrying ranges in parallel.
@@ -341,11 +346,11 @@ function rebuildCache() {
         sortBelow[j] = bl;
     }
 
-    // Per-region claim bounds. Edge regions are unbounded.
+    // Per-zone claim bounds. Edge zones are unbounded.
     var lo = cache.lowerBounds;
     var hi = cache.upperBounds;
-    lo.length = numRegions;
-    hi.length = numRegions;
+    lo.length = numZones;
+    hi.length = numZones;
     lo[0] = -Infinity;
     hi[N] = Infinity;
     for (var i = 0; i < N; i++) {
@@ -353,22 +358,22 @@ function rebuildCache() {
         lo[i + 1] = sortPts[i] - sortBelow[i];
     }
 
-    // Region channels and transposes, plus deduplicated failsafe set.
-    // Router region index i goes 0 (lowest pitch) to N (highest), but
-    // the UI labels regions top-down: Region 1 is the topmost (router
-    // index N), Region N+1 the bottommost (router index 0). Map raw
+    // Zone channels and transposes, plus deduplicated failsafe set.
+    // Router zone index i goes 0 (lowest pitch) to N (highest), but
+    // the UI labels zones top-down: Zone 1 is the topmost (router
+    // index N), Zone N+1 the bottommost (router index 0). Map raw
     // UI-keyed values into router-keyed slots accordingly.
-    var chs = cache.regionChannels;
-    var trs = cache.regionTransposes;
+    var chs = cache.zoneChannels;
+    var trs = cache.zoneTransposes;
     var failsafe = cache.failsafeChannels;
-    chs.length = numRegions;
-    trs.length = numRegions;
+    chs.length = numZones;
+    trs.length = numZones;
     failsafe.length = 0;
-    for (var i = 0; i < numRegions; i++) {
-        var uiLabel = numRegions - i;
-        var ch = rawRegionChannels[uiLabel];
+    for (var i = 0; i < numZones; i++) {
+        var uiLabel = numZones - i;
+        var ch = rawZoneChannels[uiLabel];
         chs[i] = ch;
-        trs[i] = rawRegionTransposes[uiLabel];
+        trs[i] = rawZoneTransposes[uiLabel];
         var seen = false;
         for (var j = 0; j < failsafe.length; j++) {
             if (failsafe[j] === ch) { seen = true; break; }
@@ -383,7 +388,7 @@ function applyVisibility() {
         var m = paramMeta[i];
         var hide = false;
         if (m.splitIndex !== undefined) hide = m.splitIndex > N;
-        else if (m.regionIndex !== undefined) hide = m.regionIndex > N + 1;
+        else if (m.zoneIndex !== undefined) hide = m.zoneIndex > N + 1;
         PluginParameters[i].hidden = hide;
     }
 }
@@ -412,12 +417,12 @@ function ParameterChanged(param, value) {
             if (m.splitIndex <= cache.numSplits) rebuildCache();
             return;
         case "channel":
-            rawRegionChannels[m.regionIndex] = value;
-            if (m.regionIndex <= cache.numSplits + 1) rebuildCache();
+            rawZoneChannels[m.zoneIndex] = value;
+            if (m.zoneIndex <= cache.numSplits + 1) rebuildCache();
             return;
         case "transpose":
-            rawRegionTransposes[m.regionIndex] = value;
-            if (m.regionIndex <= cache.numSplits + 1) rebuildCache();
+            rawZoneTransposes[m.zoneIndex] = value;
+            if (m.zoneIndex <= cache.numSplits + 1) rebuildCache();
             return;
     }
 }
@@ -427,7 +432,7 @@ rebuildCache();
 
 function HandleMIDI(event) {
     if (event instanceof NoteOn) {
-        prevRegion = routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch);
+        prevZone = routeNoteOn(event, cache, lastPitches, prevZone, noteToChannel, noteToPitch);
         event.send();
         return;
     }
@@ -437,7 +442,7 @@ function HandleMIDI(event) {
         } else {
             // Failsafe: a NoteOff arrived with no recorded NoteOn pairing
             // (e.g. script started mid-note). Fan out to every active
-            // region channel so the note doesn't hang.
+            // zone channel so the note doesn't hang.
             var chs = cache.failsafeChannels;
             for (var i = 0; i < chs.length; i++) {
                 event.channel = chs[i];

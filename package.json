@@ -1,7 +1,7 @@
 {
     "name": "scripter-keyboard-split",
     "version": "0.1.0",
-    "description": "Dual-region MIDI keyboard split for Logic Pro / MainStage Scripter",
+    "description": "Dual-zone MIDI keyboard split for Logic Pro / MainStage Scripter",
     "type": "module",
     "scripts": {
         "test": "bun test",

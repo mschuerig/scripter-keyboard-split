@@ -9,7 +9,7 @@ import {
 const R3 = { above: 3, below: 3 };
 const R0 = { above: 0, below: 0 };
 
-// Pre-compute the per-region claim bounds the same way the Scripter
+// Pre-compute the per-zone claim bounds the same way the Scripter
 // wrapper's rebuildCache does. Tests express layouts as user-facing
 // (split points + ranges) and convert here.
 function bounds(splits, ranges) {
@@ -40,14 +40,14 @@ function runSequence(pitches, splits, ranges, lp) {
 }
 
 describe("routeNote — single split", () => {
-    it("routes a pitch above the floating zone to the upper region", () => {
+    it("routes a pitch above the floating zone to the upper zone", () => {
         const lp = [null, null];
         const [lo, hi] = bounds([60], [R3]);
         expect(routeNote(65, lo, hi, lp, -1)).toBe(1);
         expect(lp).toEqual([null, 65]);
     });
 
-    it("routes a pitch below the floating zone to the lower region", () => {
+    it("routes a pitch below the floating zone to the lower zone", () => {
         const lp = [null, null];
         const [lo, hi] = bounds([60], [R3]);
         expect(routeNote(55, lo, hi, lp, -1)).toBe(0);
@@ -59,7 +59,7 @@ describe("routeNote — single split", () => {
         // Two distinct hands. Right hand opens at 64 (only r1 candidate).
         // Each left-hand 52 is forced to r0 (out of r1's claim). When
         // the right hand returns to a near-split pitch (62, 60, 59),
-        // the prev-region rule does NOT fire (the step from 52 is
+        // the prev-zone rule does NOT fire (the step from 52 is
         // larger than the buffer), so closest-last-pitch wins and the
         // right hand at lp_r1=64 reclaims the note.
         expect(runSequence([64, 52, 62, 52, 60, 52, 59], [60], [R3], lp))
@@ -89,14 +89,14 @@ describe("routeNote — single split", () => {
         expect(lp[0]).toBe(57);
     });
 
-    it("ties go to the higher region index (upper wins on tie)", () => {
+    it("ties go to the higher zone index (upper wins on tie)", () => {
         const lp = [58, 62];
         const [lo, hi] = bounds([60], [R3]);
         // 60 ∈ both claim zones; dists both 2; no prev → higher index.
         expect(routeNote(60, lo, hi, lp, -1)).toBe(1);
     });
 
-    it("does not extend a region past its floating range", () => {
+    it("does not extend a zone past its floating range", () => {
         // Lower played 48; upper's claim is [57, ∞). A pitch of 56 is
         // outside upper's zone — upper cannot claim it.
         const lp = [48, null];
@@ -106,8 +106,8 @@ describe("routeNote — single split", () => {
 
     it("follows the active hand back across the split (descending then bouncing)", () => {
         // A single hand walked 62→56; when it bounces back to 57, it
-        // stays with the lower region (the hand that just played 56),
-        // not the upper region whose stale lp=57 happens to match
+        // stays with the lower zone (the hand that just played 56),
+        // not the upper zone whose stale lp=57 happens to match
         // exactly.
         const lp = [null, null];
         expect(runSequence([62, 61, 60, 59, 58, 57, 56, 57], [60], [R3], lp))
@@ -117,7 +117,7 @@ describe("routeNote — single split", () => {
     it("follows the active hand back across the split (ascending then bouncing)", () => {
         // Symmetric: a hand ascends from 50, crosses the split when
         // it must (at 64, past r0's ceiling of 63), then bounces back.
-        // The bounce stays with the upper region.
+        // The bounce stays with the upper zone.
         const lp = [null, null];
         expect(runSequence([50, 55, 58, 60, 62, 63, 64, 63], [60], [R3], lp))
             .toEqual([0, 0, 0, 0, 0, 0, 1, 1]);
@@ -125,21 +125,21 @@ describe("routeNote — single split", () => {
 });
 
 describe("routeNote — hard split (ranges = 0)", () => {
-    it("routes a pitch above the split to the upper region", () => {
+    it("routes a pitch above the split to the upper zone", () => {
         const lp = [null, null];
         const [lo, hi] = bounds([60], [R0]);
         expect(routeNote(65, lo, hi, lp, -1)).toBe(1);
         expect(lp[1]).toBe(65);
     });
 
-    it("routes a pitch below the split to the lower region", () => {
+    it("routes a pitch below the split to the lower zone", () => {
         const lp = [null, null];
         const [lo, hi] = bounds([60], [R0]);
         expect(routeNote(55, lo, hi, lp, -1)).toBe(0);
         expect(lp[0]).toBe(55);
     });
 
-    it("routes the split note itself to the upper region", () => {
+    it("routes the split note itself to the upper zone", () => {
         const [lo, hi] = bounds([60], [R0]);
         expect(routeNote(60, lo, hi, [null, null], -1)).toBe(1);
     });
@@ -157,46 +157,46 @@ describe("routeNote — two splits", () => {
     const splits = [48, 72];
     const ranges = [R3, R3];
 
-    it("routes a low pitch to region 0", () => {
+    it("routes a low pitch to zone 0", () => {
         const [lo, hi] = bounds(splits, ranges);
         expect(routeNote(30, lo, hi, [null, null, null], -1)).toBe(0);
     });
 
-    it("routes a middle pitch to region 1", () => {
+    it("routes a middle pitch to zone 1", () => {
         const [lo, hi] = bounds(splits, ranges);
         expect(routeNote(60, lo, hi, [null, null, null], -1)).toBe(1);
     });
 
-    it("routes a high pitch to region 2", () => {
+    it("routes a high pitch to zone 2", () => {
         const [lo, hi] = bounds(splits, ranges);
         expect(routeNote(90, lo, hi, [null, null, null], -1)).toBe(2);
     });
 
-    it("routes each split point itself to the region above it", () => {
+    it("routes each split point itself to the zone above it", () => {
         const [lo, hi] = bounds(splits, ranges);
         expect(routeNote(48, lo, hi, [null, null, null], -1)).toBe(1);
         expect(routeNote(72, lo, hi, [null, null, null], -1)).toBe(2);
     });
 
-    it("three-handed pattern stays in three distinct regions", () => {
+    it("three-handed pattern stays in three distinct zones", () => {
         const lp = [null, null, null];
         expect(runSequence([36, 60, 76, 36, 62, 75, 36, 64, 74], splits, ranges, lp))
             .toEqual([0, 1, 2, 0, 1, 2, 0, 1, 2]);
     });
 
-    it("descending past the topmost split moves into the middle region", () => {
+    it("descending past the topmost split moves into the middle zone", () => {
         const lp = [null, null, null];
         expect(runSequence([72, 71, 70, 69, 68, 67, 66], splits, ranges, lp))
             .toEqual([2, 2, 2, 2, 1, 1, 1]);
     });
 
-    it("ascending past a split's floating range moves into the next region", () => {
+    it("ascending past a split's floating range moves into the next zone", () => {
         const lp = [null, null, null];
         expect(runSequence([36, 48, 50, 51, 52, 53], splits, ranges, lp))
             .toEqual([0, 0, 0, 0, 1, 1]);
     });
 
-    it("stale last-pitch in another region does not hijack the active hand", () => {
+    it("stale last-pitch in another zone does not hijack the active hand", () => {
         // The user-reported regression. Same melody as the next test,
         // but the user had played 57 in isolation earlier — fresh-state
         // tie-break put that lone 57 into r2 (highest index wins on
@@ -217,12 +217,12 @@ describe("routeNote — two splits", () => {
         expect(results).toEqual([1, 1, 1, 1, 1, 1]);
     });
 
-    it("middle-region melody stays in middle when descending through the split point", () => {
+    it("middle-zone melody stays in middle when descending through the split point", () => {
         // Splits at 47 (hard 0/0) and 60 (smart 3/3). The middle
-        // region's home covers [47, 60). The user walks
+        // zone's home covers [47, 60). The user walks
         // 55→57→59→60→59→57 — ascending across split 2 into its reach
         // zone, then descending back. All six notes are clearly a
-        // single middle-region hand and must all go to region 1.
+        // single middle-zone hand and must all go to zone 1.
         const localSplits = [47, 60];
         const localRanges = [R0, R3];
         const lp = [null, null, null];
@@ -251,8 +251,8 @@ function makeCache(splits, ranges, channels, transposes) {
     return {
         lowerBounds,
         upperBounds,
-        regionChannels: channels.slice(),
-        regionTransposes: transposes.slice(),
+        zoneChannels: channels.slice(),
+        zoneTransposes: transposes.slice(),
         failsafeChannels
     };
 }
@@ -264,7 +264,7 @@ function makeEvent(pitch, channel = 0) {
 
 describe("routeNoteOn / routeNoteOff — note pairing under transposition", () => {
     it("NoteOff for a transposed note carries the same transposed pitch as its NoteOn", () => {
-        // The reported bug: lower region is transposed +1 octave. A
+        // The reported bug: lower zone is transposed +1 octave. A
         // NoteOn at controller pitch 50 goes out as pitch 62. The
         // matching NoteOff must also go out as pitch 62 — otherwise
         // the synth, which only saw pitch 62 turn on, never gets a
@@ -286,7 +286,7 @@ describe("routeNoteOn / routeNoteOff — note pairing under transposition", () =
         expect(off.channel).toBe(2);
     });
 
-    it("transposed lower region overlapping the upper region: each NoteOff pairs with its own NoteOn", () => {
+    it("transposed lower zone overlapping the upper zone: each NoteOff pairs with its own NoteOn", () => {
         // Lower transposed +1 oct, upper at unity. Controller plays 50
         // (→ out as 62 on lower's channel) and 64 (→ out as 64 on
         // upper's channel). Both held simultaneously. Releasing each

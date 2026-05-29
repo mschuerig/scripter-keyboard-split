@@ -3,11 +3,11 @@
 # scripter-keyboard-split
 
 Ein Skript für das **Scripter-Plug-in von MainStage / Logic Pro**, das
-deine MIDI-Tastatur in bis zu vier Regionen aufteilt und jede auf
+deine MIDI-Tastatur in bis zu vier Zonen aufteilt und jede auf
 einem eigenen MIDI-Kanal sendet — damit du z.B. das obere und untere
 Manual einer Hammond-Orgel auf einer einzigen Tastatur spielen kannst,
 ohne dass dir der Splitpunkt beim zweihändigen Spiel in die Quere
-kommt. Eine dritte oder vierte Region kannst du für einen Basspedal-
+kommt. Eine dritte oder vierte Zone kannst du für einen Basspedal-
 Bereich, eine Lead-Stimme oder ein paar Tasten mit Sound-Effekten
 hinzunehmen.
 
@@ -72,46 +72,46 @@ Konfiguration kombinieren.
 
 ## Die Bedienelemente
 
-Das Scripter-Fenster listet die Regler von der obersten Region der
+Das Scripter-Fenster listet die Regler von der obersten Zone der
 Tastatur (oben in der Liste) bis zur untersten (unten in der Liste).
-**Region 1** ist die oberste Region, Region 2 die nächste darunter
-und so weiter. **Split Point N** ist die Grenze zwischen Region N
-und Region N+1. Wenn du **Number of Splits** erhöhst, erscheinen
-weitere Zeilen am Ende der Liste (= eine neue Region am unteren Ende
+**Zone 1** ist die oberste Zone, Zone 2 die nächste darunter
+und so weiter. **Split Point N** ist die Grenze zwischen Zone N
+und Zone N+1. Wenn du **Number of Splits** erhöhst, erscheinen
+weitere Zeilen am Ende der Liste (= eine neue Zone am unteren Ende
 der Tastatur); wenn du es verringerst, verschwinden sie wieder.
 
 | Regler | Wirkung |
 |---|---|
-| **Number of Splits** | Wie viele Splitpunkte aktiv sind (1–3). Ein Split ergibt zwei Regionen, zwei Splits drei und so weiter. Die Zeilen für nicht benötigte Splits und Regionen werden ausgeblendet. |
-| **Region N Channel** | Der MIDI-Kanal, auf dem Noten der Region N gesendet werden. Voreinstellungen: `1, 2, 3, 4` — Region 1 (die oberste Region, typisch das Obermanual oder die rechte Melodiehand) liegt konventionell auf Kanal 1. |
-| **Region N Transpose** | Region N in ganzen Oktaven nach oben oder unten verschieben. Typisch für die unterste Region in einem Hammond-Setup: `-1`, damit deine linke Hand am eingestrichenen C den unteren Bereich des Untermanuals spielt. |
-| **Split Point N** | Die Note, an der Split N die Tastatur teilt. `60` ist das eingestrichene C. Eine Note exakt auf einem Splitpunkt geht in die Region oberhalb. Die Nummerierung gibt keine Reihenfolge der Tonhöhen vor — wenn du Split Point 2 über Split Point 1 setzt, sortiert das Skript intern. |
-| **Floating Range Above N / Floating Range Below N** | Wie viele Halbtöne oberhalb/unterhalb von Split N die angrenzenden Regionen beanspruchen dürfen. Das ist eine harte Obergrenze für die Reichweite jeder Region — eine Region kann sich nicht weiter ausdehnen als ihre Floating Range, egal wo ihre letzte Note lag. **Beide auf 0** = ein harter, starrer Split. Größere Werte = jede Region darf mehr Noten jenseits der Linie für sich beanspruchen, und im Überlappungsbereich gewinnt diejenige, deren letzte Note näher liegt. |
+| **Number of Splits** | Wie viele Splitpunkte aktiv sind (1–3). Ein Split ergibt zwei Zonen, zwei Splits drei und so weiter. Die Zeilen für nicht benötigte Splits und Zonen werden ausgeblendet. |
+| **Zone N Channel** | Der MIDI-Kanal, auf dem Noten der Zone N gesendet werden. Voreinstellungen: `1, 2, 3, 4` — Zone 1 (die oberste Zone, typisch das Obermanual oder die rechte Melodiehand) liegt konventionell auf Kanal 1. |
+| **Zone N Transpose** | Zone N in ganzen Oktaven nach oben oder unten verschieben. Typisch für die unterste Zone in einem Hammond-Setup: `-1`, damit deine linke Hand am eingestrichenen C den unteren Bereich des Untermanuals spielt. |
+| **Split Point N** | Die Note, an der Split N die Tastatur teilt. `60` ist das eingestrichene C. Eine Note exakt auf einem Splitpunkt geht in die Zone oberhalb. Die Nummerierung gibt keine Reihenfolge der Tonhöhen vor — wenn du Split Point 2 über Split Point 1 setzt, sortiert das Skript intern. |
+| **Floating Range Above N / Floating Range Below N** | Wie viele Halbtöne oberhalb/unterhalb von Split N die angrenzenden Zonen beanspruchen dürfen. Das ist eine harte Obergrenze für die Reichweite jeder Zone — eine Zone kann sich nicht weiter ausdehnen als ihre Floating Range, egal wo ihre letzte Note lag. **Beide auf 0** = ein harter, starrer Split. Größere Werte = jede Zone darf mehr Noten jenseits der Linie für sich beanspruchen, und im Überlappungsbereich gewinnt diejenige, deren letzte Note näher liegt. |
 
 ### Sinnvolle Startwerte
 
 - **Hammond-Orgel mit zwei Manualen** — Number of Splits `1 split
-  (2 regions)`, Split Point 1 `60`, Floating Range Above 1 = Floating
-  Range Below 1 = `3`. Die Voreinstellungen geben Region 1
-  (Obermanual) Kanal `1` und Region 2 (Untermanual) Kanal `2`. Region
+  (2 zones)`, Split Point 1 `60`, Floating Range Above 1 = Floating
+  Range Below 1 = `3`. Die Voreinstellungen geben Zone 1
+  (Obermanual) Kanal `1` und Zone 2 (Untermanual) Kanal `2`. Zone
   2 Transpose auf `-1`.
 - **Klavier rechts, Bass links** — Number of Splits `1 split (2
-  regions)`, Split Point 1 etwa `48` (das C unterhalb des
+  zones)`, Split Point 1 etwa `48` (das C unterhalb des
   eingestrichenen C), Floating Range Above 1 = Floating Range Below 1
-  = `0` (harter Split). Region 2 Transpose `-1` oder `-2`, falls
+  = `0` (harter Split). Zone 2 Transpose `-1` oder `-2`, falls
   nötig.
 - **Hammond mit Basspedal-Bereich** — Number of Splits `2 splits (3
-  regions)`, Split Point 1 etwa `60` (zwischen Ober- und Untermanual),
+  zones)`, Split Point 1 etwa `60` (zwischen Ober- und Untermanual),
   Split Point 2 etwa `48` (zwischen Untermanual und Bass). Für den
   Manual-Split (Split 1) z.B. Floating Range `3 / 3`; für den Bass-
   Split (Split 2) Floating Range `0 / 0` — eine harte Grenze, damit
-  der Bass nicht nach oben leckt. Voreinstellungen: Region 1
-  (Obermanual) Kanal `1`, Region 2 (Untermanual) Kanal `2`, Region 3
-  (Bass) Kanal `3`. Region 3 Transpose `-2`, falls dein Basssound
+  der Bass nicht nach oben leckt. Voreinstellungen: Zone 1
+  (Obermanual) Kanal `1`, Zone 2 (Untermanual) Kanal `2`, Zone 3
+  (Bass) Kanal `3`. Zone 3 Transpose `-2`, falls dein Basssound
   unterhalb deiner Handlage sitzt.
 - **Sound-Effekte auf den obersten Tasten** — Split Point 1 auf etwa
   `96`–`108` setzen (trennt die FX-Zone von allem darunter), Floating
-  Range `0 / 0` (harte Linie) und den Kanal von Region 1 einem
+  Range `0 / 0` (harte Linie) und den Kanal von Zone 1 einem
   separaten FX-Instrument zuweisen.
 
 ## Empfänger-Plug-in einrichten
@@ -124,10 +124,10 @@ auf seinem eigenen Strip einspeist.
 
 **Für IK Hammond / Vintage B3 / Blue3:** Öffne die MIDI-Einstellungen
 des Plug-ins und stelle jedes Manual auf den Kanal, der in der
-entsprechenden Region-Zeile oben steht.
+entsprechenden Zone-Zeile oben steht.
 
 **Für einen multitimbralen Sampler:** Ordne jeden Klang dem Kanal der
-Region zu, die ihn auslösen soll.
+Zone zu, die ihn auslösen soll.
 
 ## Beispiel: Warum ein smarter Split etwas bringt
 
@@ -150,22 +150,22 @@ Mit einem **harten Split bei Note 60** (Floating Ranges `0 / 0`):
 - `59` → **unten** ✗ — dein rechtes H landet mitten in der Phrase
   plötzlich auf dem Untermanual.
 
-Mit **Floating Range Above und Below auf 3** reicht jede Region `3`
-Halbtöne über den Splitpunkt hinaus — beide Regionen können die Noten
+Mit **Floating Range Above und Below auf 3** reicht jede Zone `3`
+Halbtöne über den Splitpunkt hinaus — beide Zonen können die Noten
 zwischen `57` und `63` für sich beanspruchen, und es gewinnt die mit
 der näher liegenden letzten Note. Die rechte Hand bewegt sich um
 `60–64`; wenn das `59` kommt, ist es näher am rechten `60` als am
 linken `52`, und die Melodie bleibt geschlossen auf dem Obermanual.
 
-Das Prinzip gilt auch mit mehr Splits: Jede Region merkt sich ihre
+Das Prinzip gilt auch mit mehr Splits: Jede Zone merkt sich ihre
 eigene letzte Note, sodass ein Walking Bass unter einem Akkord und
 darüber einer Melodiestimme nicht ineinander rutschen.
 
 ## Fehlersuche
 
-**Es kommt nichts oder nur ein Teil der Regionen ist zu hören.**
+**Es kommt nichts oder nur ein Teil der Zonen ist zu hören.**
 Prüfe den MIDI-Empfangskanal deines Instruments. In den
-Scripter-Parametern siehst du, auf welchen Kanal jede Region sendet —
+Scripter-Parametern siehst du, auf welchen Kanal jede Zone sendet —
 das Instrument muss genau auf diesen Kanal hören.
 
 **Eine Note hängt.**
@@ -179,9 +179,9 @@ zwischendurch den Split veränderst. Hängende Noten sind selten und
 treten meist nur dann auf, wenn das Skript gestartet wurde, während
 eine Taste gerade gedrückt war.
 
-**Noten springen manchmal in die falsche Region.**
+**Noten springen manchmal in die falsche Zone.**
 Probier kleinere Floating Ranges. Je größer der Bereich, desto eher
-greift eine Region über einen Splitpunkt hinaus. Wenn du an diesem
+greift eine Zone über einen Splitpunkt hinaus. Wenn du an diesem
 Split ohnehin strikt getrennte Stimmen spielst, setz die Floating
 Ranges auf `0`.
 
@@ -204,40 +204,40 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
 
 ### Wie der Algorithmus funktioniert
 
-- Die Tastatur wird von N Splitpunkten in N+1 Regionen geteilt. Der
-  Router indiziert sie null-basiert nach Tonhöhe — Router-Region 0
-  ist die tiefste Tonhöhenregion, Router-Region N die höchste. (Die
-  UI-Beschriftung läuft anders herum: UI Region 1 = Router-Region N
-  = oben, UI Region N+1 = Router-Region 0 = unten. Das Wrapper-
+- Die Tastatur wird von N Splitpunkten in N+1 Zonen geteilt. Der
+  Router indiziert sie null-basiert nach Tonhöhe — Router-Zone 0
+  ist die tiefste Tonhöhenzone, Router-Zone N die höchste. (Die
+  UI-Beschriftung läuft anders herum: UI Zone 1 = Router-Zone N
+  = oben, UI Zone N+1 = Router-Zone 0 = unten. Das Wrapper-
   Skript übersetzt das in `rebuildCache`.) Jeder Splitpunkt hat eine
   Floating Range Above und Below (in Halbtönen).
-- Jede Region hat eine **Claim Zone** in Tonhöhen:
-    - Region 0: `(-∞, splitPoints[0] + above_0]`
-    - Region k (Mitte): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`
-    - Region N: `[splitPoints[N-1] − below_{N-1}, +∞)`
-  Eine Region kann eine Note nur dann für sich beanspruchen, wenn
+- Jede Zone hat eine **Claim Zone** in Tonhöhen:
+    - Zone 0: `(-∞, splitPoints[0] + above_0]`
+    - Zone k (Mitte): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`
+    - Zone N: `[splitPoints[N-1] − below_{N-1}, +∞)`
+  Eine Zone kann eine Note nur dann für sich beanspruchen, wenn
   die Note in ihrer Claim Zone liegt — die Floating Range ist eine
-  harte Obergrenze für die Reichweite einer Region.
+  harte Obergrenze für die Reichweite einer Zone.
 - Für jede eingehende Note:
-  1. Sammle alle Regionen, deren Claim Zone die Note enthält.
-  2. **Folge der Hand:** Ist die Region der *vorherigen* Note dabei,
+  1. Sammle alle Zonen, deren Claim Zone die Note enthält.
+  2. **Folge der Hand:** Ist die Zone der *vorherigen* Note dabei,
      bleibt die neue Note bei ihr — es sei denn, die zuletzt
-     geroutete Note einer anderen Region liegt um mehr als einen
+     geroutete Note einer anderen Zone liegt um mehr als einen
      kleinen Puffer von Halbtönen näher als die vorherige. So bleibt
-     eine durch die aktive Region laufende Melodie dort, ohne dass
+     eine durch die aktive Zone laufende Melodie dort, ohne dass
      eine veraltete oder zufällig passende letzte Note der anderen
-     Region sie hinüberzieht — während eine deutlich näher liegende
+     Zone sie hinüberzieht — während eine deutlich näher liegende
      andere Hand die Note durchaus zurückerobern kann (z.B. beim
-     zweihändigen Orgelmuster, wo die letzte Note der anderen Region
+     zweihändigen Orgelmuster, wo die letzte Note der anderen Zone
      viel näher liegt als die gerade gespielte).
-  3. Sonst gewinnt die Region, deren zuletzt geroutete Note in
-     Halbtönen am nächsten liegt; Regionen ohne letzte Note gelten
+  3. Sonst gewinnt die Zone, deren zuletzt geroutete Note in
+     Halbtönen am nächsten liegt; Zonen ohne letzte Note gelten
      als unendlich weit weg; bei Gleichstand gewinnt die höhere
-     Region.
+     Zone.
 - **Harter Split** ist derselbe Algorithmus mit beiden Ranges eines
-  Splits auf 0: Die Claim Zones der zwei angrenzenden Regionen
+  Splits auf 0: Die Claim Zones der zwei angrenzenden Zonen
   berühren sich am Splitpunkt ohne Überlappung (außer am Splitpunkt
-  selbst, den der Gleichstand-Mechanismus an die obere Region gibt).
+  selbst, den der Gleichstand-Mechanismus an die obere Zone gibt).
   Harte und smarte Splits dürfen in einer Konfiguration gemischt
   werden.
 - **Note-to-Channel-Zuordnung**: Ein `noteToChannel[0..127]`-Array
@@ -249,8 +249,8 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
   ausschließlich in `rebuildCache` an Ort und Stelle mutiert wird —
   und das nur bei einer Parameteränderung. Der Cache enthält neben
   den sortierten Splitpunkten auch vorausberechnete Claim-Grenzen
-  pro Region (`cache.lowerBounds[k]` / `cache.upperBounds[k]`), die
-  Kanal- und Transponier-Tabellen pro Region und ein dedupliziertes
+  pro Zone (`cache.lowerBounds[k]` / `cache.upperBounds[k]`), die
+  Kanal- und Transponier-Tabellen pro Zone und ein dedupliziertes
   Failsafe-Set. Der Router liest die Grenzen direkt — keine
   Arithmetik im Hot Path, keine Allokationen pro Event, keine
   `GetParameter`-Aufrufe. Selbst `rebuildCache` allokiert nach dem
@@ -261,7 +261,7 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
 
 | Datei | Zweck |
 |---|---|
-| `split-router.js` | Die alleinige Quelle für den N-Region-Routing-Algorithmus. Reines JavaScript ohne Scripter-Abhängigkeiten — voll unit-testbar. |
+| `split-router.js` | Die alleinige Quelle für den N-Zone-Routing-Algorithmus. Reines JavaScript ohne Scripter-Abhängigkeiten — voll unit-testbar. |
 | `split-router.test.js` | Bun-Testsuite für Konfigurationen mit ein und zwei Splits, harte vs. smarte Splits, gemischte Splits, defensive Sortierung und die Transponier-Hilfsfunktion. |
 | `scripter-keyboard-split.template.js` | Handgepflegtes Scripter-Gerüst. Enthält die `MAX_SPLITS`-Konstante, den Parameter-Generator, den Cache und `ParameterChanged` / `HandleMIDI`. Hat einen `@inject:split-router`-Marker. |
 | `build.js` | Entfernt `export ` aus `split-router.js` und fügt den Code an der Marker-Stelle der Vorlage ein. |
