@@ -14,6 +14,13 @@
  * Region 2, Split 2, … — so adjusting Number of Splits reveals or
  * hides rows at the bottom of the list without shifting the rest.
  *
+ * Hot-path discipline: HandleMIDI reads only the pre-computed
+ * cache. rebuildCache is the only function that mutates routing
+ * state, and it does so in place — sorting via scratch arrays
+ * allocated once at script load, and computing per-region claim
+ * bounds (cache.lowerBounds / cache.upperBounds) so the router
+ * doesn't have to do any arithmetic per event.
+ *
  * This file is GENERATED. The routing logic block between the
  * @inject:split-router markers comes from split-router.js. To edit the
  * routing algorithm, change split-router.js and run `bun run build`.
@@ -123,14 +130,21 @@ for (var i = 1; i <= MAX_REGIONS; i++) {
 }
 
 // Cache derived from raw values. HandleMIDI reads only this object.
+// All arrays are reused in place by rebuildCache.
 var cache = {
     numSplits: DEFAULT_NUM_SPLITS,
-    splitPoints: [],
-    floatingRanges: [],
+    lowerBounds: [],
+    upperBounds: [],
     regionChannels: [],
     regionTransposes: [],
     failsafeChannels: []
 };
+
+// Scratch arrays for the in-place sort in rebuildCache. Allocated
+// once at script load and reused on every rebuild.
+var sortPts = new Array(MAX_SPLITS);
+var sortAbove = new Array(MAX_SPLITS);
+var sortBelow = new Array(MAX_SPLITS);
 
 var lastPitches = new Array(MAX_REGIONS);
 for (var i = 0; i < MAX_REGIONS; i++) lastPitches[i] = null;
@@ -143,58 +157,60 @@ for (var i = 0; i < 128; i++) noteToChannel[i] = null;
 /**
  * N-region keyboard split router.
  *
- * The keyboard is divided by N split points into N+1 contiguous regions,
- * numbered from 0 (lowest pitches) to N (highest). Each split point has
- * a Floating Range Above and Below (in semitones) that defines how far
- * the two adjacent regions can extend past the split. Region k's claim
- * zone is:
- *   [splitPoints[k-1] - floatingRanges[k-1].below,
- *    splitPoints[k]   + floatingRanges[k].above]
- * with -Infinity below region 0 and +Infinity above region N.
+ * Takes pre-computed claim zones for each region as two parallel
+ * arrays of length N+1:
  *
- * A region can claim a pitch only if the pitch falls inside its claim
- * zone — the floating range is a hard bound on how far the region
- * extends, not a stay-with reach from the last pitch.
+ *   lowerBounds[k] = lowest pitch region k can claim
+ *   upperBounds[k] = highest pitch region k can claim
  *
- * When multiple regions claim, the choice goes:
- *   1. If there is a previous-note region and it is among the
- *      candidates, it keeps the note UNLESS another candidate's
- *      last-played pitch is more than STAY_BUFFER semitones closer
- *      to the new pitch than prev's. This "follow-the-hand" rule
- *      lets a melody continuing through the prev region's claim zone
- *      stay there, while still allowing a clearly-closer other hand
- *      to win (e.g. two-handed organ pattern, where the other
- *      region's recent note is much closer than the freshly-played
- *      one in prev). The buffer prevents a stale or coincidental
- *      last-pitch in another region from narrowly beating prev.
+ * with `lowerBounds[0] = -Infinity` and `upperBounds[N] = +Infinity`
+ * for the unbounded outer edges. The Scripter wrapper computes these
+ * in rebuildCache from the sorted splitPoints and floatingRanges:
+ *
+ *   upperBounds[k]     = splitPoints[k] + floatingRanges[k].above   (k < N)
+ *   lowerBounds[k + 1] = splitPoints[k] - floatingRanges[k].below   (k < N)
+ *
+ * Setting both ranges of a split to 0 collapses it into a hard line —
+ * the two adjacent claim zones meet only at the split point.
+ *
+ * When a pitch falls inside a region's claim zone, the region is a
+ * candidate. The choice among multiple candidates:
+ *
+ *   1. If there is a previous-note region (prevRegion ≥ 0) and it is
+ *      among the candidates, it keeps the note UNLESS another
+ *      candidate's last-played pitch is more than STAY_BUFFER
+ *      semitones closer than prev's. This follow-the-hand bias keeps
+ *      a melody continuing through the active region from being
+ *      yanked across by a stale or coincidental match in another
+ *      region, while still letting a clearly-closer other hand
+ *      reclaim the note.
  *   2. Otherwise the candidate whose last-played pitch is closest in
  *      semitones wins; regions with no last pitch are treated as
  *      infinitely far; ties go to the higher region index.
  *
- * Setting both ranges of a split to 0 collapses it into a hard line —
- * the two adjacent claim zones meet only at the split point itself.
- *
  * Caller responsibilities:
- *   - splitPoints must be sorted ascending and aligned with
- *     floatingRanges (the Scripter wrapper does this in rebuildCache).
- *   - lastPitches is mutated in place: lastPitches[chosen] is set to
- *     the new pitch before this function returns.
- *   - prevRegion tracks the region returned by the most recent call
- *     (or -1 if there has been none). The caller stores the return
- *     value of this call and passes it as prevRegion next time.
+ *   - lowerBounds and upperBounds must be aligned (same length, same
+ *     region order). The Scripter wrapper guarantees this.
+ *   - lastPitches is mutated in place: lastPitches[chosen] = pitch.
+ *   - prevRegion tracks the region returned by the most recent call,
+ *     or -1 if there has been none. The caller stores the return
+ *     value and passes it back next time.
  *
- * Returns the chosen region index. The caller maps it to a MIDI
- * channel and transposition.
+ * Returns the chosen region index.
  *
- * Body uses ES5-friendly constructs (var, function declarations) so it
- * can be inlined into the MainStage Scripter file by build.js.
+ * Hot-path discipline: this function makes no heap allocations — it
+ * uses only primitive locals and reads/writes existing arrays in
+ * place. All sorting and bound arithmetic lives in rebuildCache,
+ * which runs only when the user touches a knob.
+ *
+ * Body uses ES5-friendly constructs (var, function declarations) so
+ * it can be inlined into the MainStage Scripter file by build.js.
  */
 
 var STAY_BUFFER = 2;
 
-function routeNote(pitch, splitPoints, floatingRanges, lastPitches, prevRegion) {
-    var N = splitPoints.length;
-    var numRegions = N + 1;
+function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegion) {
+    var numRegions = lowerBounds.length;
 
     var candidateCount = 0;
     var soleCandidate = -1;
@@ -203,13 +219,7 @@ function routeNote(pitch, splitPoints, floatingRanges, lastPitches, prevRegion) 
     var bestDist = Infinity;
 
     for (var k = 0; k < numRegions; k++) {
-        var lower = k > 0
-            ? splitPoints[k - 1] - floatingRanges[k - 1].below
-            : -Infinity;
-        var upper = k < N
-            ? splitPoints[k] + floatingRanges[k].above
-            : Infinity;
-        if (pitch < lower || pitch > upper) continue;
+        if (pitch < lowerBounds[k] || pitch > upperBounds[k]) continue;
 
         candidateCount++;
         soleCandidate = k;
@@ -253,41 +263,60 @@ function transposeByOctaves(pitch, octaves) {
 
 function rebuildCache() {
     var N = cache.numSplits;
-    var pairs = [];
-    for (var i = 1; i <= N; i++) {
-        pairs.push({
-            point: rawSplitPoints[i],
-            above: rawRangeAbove[i],
-            below: rawRangeBelow[i]
-        });
-    }
-    pairs.sort(function (a, b) { return a.point - b.point; });
+    var numRegions = N + 1;
 
-    var pts = [];
-    var rngs = [];
+    // Copy active raw values into scratch, then insertion-sort
+    // splitPoints ascending while carrying ranges in parallel.
     for (var i = 0; i < N; i++) {
-        pts.push(pairs[i].point);
-        rngs.push({ above: pairs[i].above, below: pairs[i].below });
+        sortPts[i] = rawSplitPoints[i + 1];
+        sortAbove[i] = rawRangeAbove[i + 1];
+        sortBelow[i] = rawRangeBelow[i + 1];
     }
-    cache.splitPoints = pts;
-    cache.floatingRanges = rngs;
-
-    var chs = [];
-    var trs = [];
-    var seen = {};
-    var failsafe = [];
-    for (var i = 1; i <= N + 1; i++) {
-        var ch = rawRegionChannels[i];
-        chs.push(ch);
-        trs.push(rawRegionTransposes[i]);
-        if (!seen[ch]) {
-            seen[ch] = true;
-            failsafe.push(ch);
+    for (var i = 1; i < N; i++) {
+        var pt = sortPts[i];
+        var ab = sortAbove[i];
+        var bl = sortBelow[i];
+        var j = i;
+        while (j > 0 && sortPts[j - 1] > pt) {
+            sortPts[j] = sortPts[j - 1];
+            sortAbove[j] = sortAbove[j - 1];
+            sortBelow[j] = sortBelow[j - 1];
+            j--;
         }
+        sortPts[j] = pt;
+        sortAbove[j] = ab;
+        sortBelow[j] = bl;
     }
-    cache.regionChannels = chs;
-    cache.regionTransposes = trs;
-    cache.failsafeChannels = failsafe;
+
+    // Per-region claim bounds. Edge regions are unbounded.
+    var lo = cache.lowerBounds;
+    var hi = cache.upperBounds;
+    lo.length = numRegions;
+    hi.length = numRegions;
+    lo[0] = -Infinity;
+    hi[N] = Infinity;
+    for (var i = 0; i < N; i++) {
+        hi[i] = sortPts[i] + sortAbove[i];
+        lo[i + 1] = sortPts[i] - sortBelow[i];
+    }
+
+    // Region channels and transposes, plus deduplicated failsafe set.
+    var chs = cache.regionChannels;
+    var trs = cache.regionTransposes;
+    var failsafe = cache.failsafeChannels;
+    chs.length = numRegions;
+    trs.length = numRegions;
+    failsafe.length = 0;
+    for (var i = 0; i < numRegions; i++) {
+        var ch = rawRegionChannels[i + 1];
+        chs[i] = ch;
+        trs[i] = rawRegionTransposes[i + 1];
+        var seen = false;
+        for (var j = 0; j < failsafe.length; j++) {
+            if (failsafe[j] === ch) { seen = true; break; }
+        }
+        if (!seen) failsafe.push(ch);
+    }
 }
 
 function applyVisibility() {
@@ -343,8 +372,8 @@ function HandleMIDI(event) {
         var originalPitch = event.pitch;
         var idx = routeNote(
             originalPitch,
-            cache.splitPoints,
-            cache.floatingRanges,
+            cache.lowerBounds,
+            cache.upperBounds,
             lastPitches,
             prevRegion
         );

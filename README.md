@@ -224,13 +224,16 @@ need any of this to use the plugin.*
   Note Off always lands on the same channel even if the user has
   meanwhile changed the split layout.
 - **Hot-path discipline**: `HandleMIDI` runs on every incoming MIDI
-  event. All parameter values, the sorted split-point list, and the
-  per-region channel/transpose lookup tables live in a `cache` object
-  that is rebuilt only in `ParameterChanged`, never per note. The
-  router takes positional arguments and mutates the caller's
-  `lastPitches` array in place — no per-event object or array
-  allocations, no `GetParameter` calls. Split points are sorted once
-  during cache rebuild, not on every note.
+  event. All routing state lives in a `cache` object that is mutated
+  in place by `rebuildCache`, which runs only when the user touches a
+  knob. The cache holds the sorted split points alongside
+  pre-computed per-region claim bounds (`cache.lowerBounds[k]` /
+  `cache.upperBounds[k]`), the region channel / transpose lookup
+  tables, and a deduplicated failsafe channel set. The router reads
+  the precomputed bounds directly — no arithmetic on the hot path,
+  no per-event allocations, no `GetParameter` calls. Sorting uses
+  scratch arrays allocated once at script load so even `rebuildCache`
+  itself doesn't allocate after warm-up.
 
 ### Project layout
 

@@ -239,14 +239,17 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
   das passende Note Off immer auf demselben Kanal landet — auch wenn
   zwischendurch das Split-Layout geändert wurde.
 - **Hot-Path-Disziplin**: `HandleMIDI` läuft bei jedem MIDI-Event.
-  Alle Parameterwerte, die sortierte Splitpunkt-Liste und die
-  Kanal-/Transponier-Tabellen pro Region liegen in einem `cache`-
-  Objekt, das ausschließlich in `ParameterChanged` neu aufgebaut wird
-  — nie pro Note. Der Router nimmt positionale Argumente und mutiert
-  das `lastPitches`-Array direkt — keine Objekt- oder Array-
-  Allokationen pro Event, keine `GetParameter`-Aufrufe. Die
-  Splitpunkte werden einmal beim Cache-Aufbau sortiert, nicht pro
-  Note.
+  Der gesamte Routing-Zustand liegt in einem `cache`-Objekt, das
+  ausschließlich in `rebuildCache` an Ort und Stelle mutiert wird —
+  und das nur bei einer Parameteränderung. Der Cache enthält neben
+  den sortierten Splitpunkten auch vorausberechnete Claim-Grenzen
+  pro Region (`cache.lowerBounds[k]` / `cache.upperBounds[k]`), die
+  Kanal- und Transponier-Tabellen pro Region und ein dedupliziertes
+  Failsafe-Set. Der Router liest die Grenzen direkt — keine
+  Arithmetik im Hot Path, keine Allokationen pro Event, keine
+  `GetParameter`-Aufrufe. Selbst `rebuildCache` allokiert nach dem
+  Warmup nichts mehr: die Sortier-Scratchpuffer werden einmal beim
+  Script-Laden angelegt und wiederverwendet.
 
 ### Aufbau des Projekts
 

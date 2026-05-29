@@ -14,6 +14,13 @@
  * Region 2, Split 2, … — so adjusting Number of Splits reveals or
  * hides rows at the bottom of the list without shifting the rest.
  *
+ * Hot-path discipline: HandleMIDI reads only the pre-computed
+ * cache. rebuildCache is the only function that mutates routing
+ * state, and it does so in place — sorting via scratch arrays
+ * allocated once at script load, and computing per-region claim
+ * bounds (cache.lowerBounds / cache.upperBounds) so the router
+ * doesn't have to do any arithmetic per event.
+ *
  * This file is GENERATED. The routing logic block between the
  * @inject:split-router markers comes from split-router.js. To edit the
  * routing algorithm, change split-router.js and run `bun run build`.
@@ -123,14 +130,21 @@ for (var i = 1; i <= MAX_REGIONS; i++) {
 }
 
 // Cache derived from raw values. HandleMIDI reads only this object.
+// All arrays are reused in place by rebuildCache.
 var cache = {
     numSplits: DEFAULT_NUM_SPLITS,
-    splitPoints: [],
-    floatingRanges: [],
+    lowerBounds: [],
+    upperBounds: [],
     regionChannels: [],
     regionTransposes: [],
     failsafeChannels: []
 };
+
+// Scratch arrays for the in-place sort in rebuildCache. Allocated
+// once at script load and reused on every rebuild.
+var sortPts = new Array(MAX_SPLITS);
+var sortAbove = new Array(MAX_SPLITS);
+var sortBelow = new Array(MAX_SPLITS);
 
 var lastPitches = new Array(MAX_REGIONS);
 for (var i = 0; i < MAX_REGIONS; i++) lastPitches[i] = null;
@@ -145,41 +159,60 @@ for (var i = 0; i < 128; i++) noteToChannel[i] = null;
 
 function rebuildCache() {
     var N = cache.numSplits;
-    var pairs = [];
-    for (var i = 1; i <= N; i++) {
-        pairs.push({
-            point: rawSplitPoints[i],
-            above: rawRangeAbove[i],
-            below: rawRangeBelow[i]
-        });
-    }
-    pairs.sort(function (a, b) { return a.point - b.point; });
+    var numRegions = N + 1;
 
-    var pts = [];
-    var rngs = [];
+    // Copy active raw values into scratch, then insertion-sort
+    // splitPoints ascending while carrying ranges in parallel.
     for (var i = 0; i < N; i++) {
-        pts.push(pairs[i].point);
-        rngs.push({ above: pairs[i].above, below: pairs[i].below });
+        sortPts[i] = rawSplitPoints[i + 1];
+        sortAbove[i] = rawRangeAbove[i + 1];
+        sortBelow[i] = rawRangeBelow[i + 1];
     }
-    cache.splitPoints = pts;
-    cache.floatingRanges = rngs;
-
-    var chs = [];
-    var trs = [];
-    var seen = {};
-    var failsafe = [];
-    for (var i = 1; i <= N + 1; i++) {
-        var ch = rawRegionChannels[i];
-        chs.push(ch);
-        trs.push(rawRegionTransposes[i]);
-        if (!seen[ch]) {
-            seen[ch] = true;
-            failsafe.push(ch);
+    for (var i = 1; i < N; i++) {
+        var pt = sortPts[i];
+        var ab = sortAbove[i];
+        var bl = sortBelow[i];
+        var j = i;
+        while (j > 0 && sortPts[j - 1] > pt) {
+            sortPts[j] = sortPts[j - 1];
+            sortAbove[j] = sortAbove[j - 1];
+            sortBelow[j] = sortBelow[j - 1];
+            j--;
         }
+        sortPts[j] = pt;
+        sortAbove[j] = ab;
+        sortBelow[j] = bl;
     }
-    cache.regionChannels = chs;
-    cache.regionTransposes = trs;
-    cache.failsafeChannels = failsafe;
+
+    // Per-region claim bounds. Edge regions are unbounded.
+    var lo = cache.lowerBounds;
+    var hi = cache.upperBounds;
+    lo.length = numRegions;
+    hi.length = numRegions;
+    lo[0] = -Infinity;
+    hi[N] = Infinity;
+    for (var i = 0; i < N; i++) {
+        hi[i] = sortPts[i] + sortAbove[i];
+        lo[i + 1] = sortPts[i] - sortBelow[i];
+    }
+
+    // Region channels and transposes, plus deduplicated failsafe set.
+    var chs = cache.regionChannels;
+    var trs = cache.regionTransposes;
+    var failsafe = cache.failsafeChannels;
+    chs.length = numRegions;
+    trs.length = numRegions;
+    failsafe.length = 0;
+    for (var i = 0; i < numRegions; i++) {
+        var ch = rawRegionChannels[i + 1];
+        chs[i] = ch;
+        trs[i] = rawRegionTransposes[i + 1];
+        var seen = false;
+        for (var j = 0; j < failsafe.length; j++) {
+            if (failsafe[j] === ch) { seen = true; break; }
+        }
+        if (!seen) failsafe.push(ch);
+    }
 }
 
 function applyVisibility() {
@@ -235,8 +268,8 @@ function HandleMIDI(event) {
         var originalPitch = event.pitch;
         var idx = routeNote(
             originalPitch,
-            cache.splitPoints,
-            cache.floatingRanges,
+            cache.lowerBounds,
+            cache.upperBounds,
             lastPitches,
             prevRegion
         );
