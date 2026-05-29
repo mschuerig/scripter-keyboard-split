@@ -103,3 +103,46 @@ export function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegi
 export function transposeByOctaves(pitch, octaves) {
     return Math.max(0, Math.min(127, pitch + octaves * 12));
 }
+
+/**
+ * Route a NoteOn: pick a region, set the event's channel and
+ * (possibly transposed) pitch, and remember both per controller
+ * pitch so the matching NoteOff can mirror them. Returns the chosen
+ * region index — the caller stores this as the new prevRegion.
+ *
+ * Tracking both channel AND output pitch is what stops transposed
+ * notes from hanging: a NoteOn sent at the transposed pitch must
+ * be paired with a NoteOff at the same transposed pitch, even
+ * though the controller's NoteOff carries the original pitch.
+ *
+ * Mutates event.pitch, event.channel, noteToChannel, noteToPitch.
+ */
+export function routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch) {
+    var originalPitch = event.pitch;
+    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevRegion);
+    var ch = cache.regionChannels[idx];
+    var outPitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
+    event.pitch = outPitch;
+    event.channel = ch;
+    noteToChannel[originalPitch] = ch;
+    noteToPitch[originalPitch] = outPitch;
+    return idx;
+}
+
+/**
+ * Route a NoteOff: if the original pitch has a remembered NoteOn,
+ * rewrite the event's channel/pitch to match what the synth heard
+ * and clear the slot. Returns true if the caller should send the
+ * event as-is; false means there is no recorded pairing and the
+ * caller should fan out across cache.failsafeChannels.
+ */
+export function routeNoteOff(event, noteToChannel, noteToPitch) {
+    var originalPitch = event.pitch;
+    var ch = noteToChannel[originalPitch];
+    if (ch === null || ch === undefined) return false;
+    event.channel = ch;
+    event.pitch = noteToPitch[originalPitch];
+    noteToChannel[originalPitch] = null;
+    noteToPitch[originalPitch] = null;
+    return true;
+}

@@ -152,8 +152,16 @@ var lastPitches = new Array(MAX_REGIONS);
 for (var i = 0; i < MAX_REGIONS; i++) lastPitches[i] = null;
 var prevRegion = -1;
 
+// Parallel sparse arrays keyed by the controller's NoteOn pitch.
+// On NoteOff we look up both the output channel and the (possibly
+// transposed) output pitch so the synth gets a NoteOff that matches
+// the NoteOn it heard. Without noteToPitch a transposed note hangs.
 var noteToChannel = new Array(128);
-for (var i = 0; i < 128; i++) noteToChannel[i] = null;
+var noteToPitch = new Array(128);
+for (var i = 0; i < 128; i++) {
+    noteToChannel[i] = null;
+    noteToPitch[i] = null;
+}
 
 // @inject:split-router
 // (replaced by build.js with the contents of split-router.js)
@@ -272,30 +280,15 @@ rebuildCache();
 
 function HandleMIDI(event) {
     if (event instanceof NoteOn) {
-        var originalPitch = event.pitch;
-        var idx = routeNote(
-            originalPitch,
-            cache.lowerBounds,
-            cache.upperBounds,
-            lastPitches,
-            prevRegion
-        );
-        prevRegion = idx;
-        var targetChannel = cache.regionChannels[idx];
-        event.pitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
-        event.channel = targetChannel;
-        noteToChannel[originalPitch] = targetChannel;
+        prevRegion = routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch);
         event.send();
         return;
     }
     if (event instanceof NoteOff) {
-        var recorded = noteToChannel[event.pitch];
-        if (recorded !== null && recorded !== undefined) {
-            event.channel = recorded;
+        if (routeNoteOff(event, noteToChannel, noteToPitch)) {
             event.send();
-            noteToChannel[event.pitch] = null;
         } else {
-            // Failsafe: a NoteOff arrived with no recorded NoteOn channel
+            // Failsafe: a NoteOff arrived with no recorded NoteOn pairing
             // (e.g. script started mid-note). Fan out to every active
             // region channel so the note doesn't hang.
             var chs = cache.failsafeChannels;

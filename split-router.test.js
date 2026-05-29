@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { routeNote, transposeByOctaves } from "./split-router.js";
+import {
+    routeNote,
+    transposeByOctaves,
+    routeNoteOn,
+    routeNoteOff
+} from "./split-router.js";
 
 const R3 = { above: 3, below: 3 };
 const R0 = { above: 0, below: 0 };
@@ -232,6 +237,106 @@ describe("routeNote — two splits", () => {
         // 47 falls in bass's claim (-∞, 48]; with hard split at 48,
         // middle cannot pull it up.
         expect(routeNote(47, lo, hi, lp, -1)).toBe(0);
+    });
+});
+
+// Minimal cache stand-in for the routeNoteOn / routeNoteOff helpers.
+// Mirrors the shape rebuildCache builds in the Scripter wrapper.
+function makeCache(splits, ranges, channels, transposes) {
+    const [lowerBounds, upperBounds] = bounds(splits, ranges);
+    const failsafeChannels = [];
+    for (const ch of channels) {
+        if (!failsafeChannels.includes(ch)) failsafeChannels.push(ch);
+    }
+    return {
+        lowerBounds,
+        upperBounds,
+        regionChannels: channels.slice(),
+        regionTransposes: transposes.slice(),
+        failsafeChannels
+    };
+}
+
+// Simulates a Scripter NoteOn/NoteOff: a mutable bag of pitch + channel.
+function makeEvent(pitch, channel = 0) {
+    return { pitch, channel };
+}
+
+describe("routeNoteOn / routeNoteOff — note pairing under transposition", () => {
+    it("NoteOff for a transposed note carries the same transposed pitch as its NoteOn", () => {
+        // The reported bug: lower region is transposed +1 octave. A
+        // NoteOn at controller pitch 50 goes out as pitch 62. The
+        // matching NoteOff must also go out as pitch 62 — otherwise
+        // the synth, which only saw pitch 62 turn on, never gets a
+        // NoteOff for it and the note hangs.
+        const cache = makeCache([60], [R3], [2, 1], [1, 0]);
+        const lastPitches = [null, null];
+        const noteToChannel = new Array(128).fill(null);
+        const noteToPitch = new Array(128).fill(null);
+
+        const on = makeEvent(50);
+        routeNoteOn(on, cache, lastPitches, -1, noteToChannel, noteToPitch);
+        expect(on.pitch).toBe(62);
+        expect(on.channel).toBe(2);
+
+        const off = makeEvent(50);
+        const sent = routeNoteOff(off, noteToChannel, noteToPitch);
+        expect(sent).toBe(true);
+        expect(off.pitch).toBe(62);
+        expect(off.channel).toBe(2);
+    });
+
+    it("transposed lower region overlapping the upper region: each NoteOff pairs with its own NoteOn", () => {
+        // Lower transposed +1 oct, upper at unity. Controller plays 50
+        // (→ out as 62 on lower's channel) and 64 (→ out as 64 on
+        // upper's channel). Both held simultaneously. Releasing each
+        // must reach the correct channel with the same output pitch
+        // the synth heard on NoteOn.
+        const cache = makeCache([60], [R3], [2, 1], [1, 0]);
+        const lastPitches = [null, null];
+        const noteToChannel = new Array(128).fill(null);
+        const noteToPitch = new Array(128).fill(null);
+
+        const on1 = makeEvent(50);
+        routeNoteOn(on1, cache, lastPitches, -1, noteToChannel, noteToPitch);
+        const on2 = makeEvent(64);
+        routeNoteOn(on2, cache, lastPitches, 0, noteToChannel, noteToPitch);
+
+        expect(on1.pitch).toBe(62);
+        expect(on1.channel).toBe(2);
+        expect(on2.pitch).toBe(64);
+        expect(on2.channel).toBe(1);
+
+        const off1 = makeEvent(50);
+        routeNoteOff(off1, noteToChannel, noteToPitch);
+        expect(off1.pitch).toBe(62);
+        expect(off1.channel).toBe(2);
+
+        const off2 = makeEvent(64);
+        routeNoteOff(off2, noteToChannel, noteToPitch);
+        expect(off2.pitch).toBe(64);
+        expect(off2.channel).toBe(1);
+    });
+
+    it("NoteOff with no recorded NoteOn returns false (caller fans out as failsafe)", () => {
+        const noteToChannel = new Array(128).fill(null);
+        const noteToPitch = new Array(128).fill(null);
+        const off = makeEvent(64);
+        expect(routeNoteOff(off, noteToChannel, noteToPitch)).toBe(false);
+    });
+
+    it("releasing a held note clears its slot so a re-press routes independently", () => {
+        const cache = makeCache([60], [R3], [2, 1], [1, 0]);
+        const lastPitches = [null, null];
+        const noteToChannel = new Array(128).fill(null);
+        const noteToPitch = new Array(128).fill(null);
+
+        routeNoteOn(makeEvent(50), cache, lastPitches, -1, noteToChannel, noteToPitch);
+        routeNoteOff(makeEvent(50), noteToChannel, noteToPitch);
+        expect(noteToChannel[50]).toBeNull();
+        expect(noteToPitch[50]).toBeNull();
+        // After release a stale NoteOff should not be routed.
+        expect(routeNoteOff(makeEvent(50), noteToChannel, noteToPitch)).toBe(false);
     });
 });
 

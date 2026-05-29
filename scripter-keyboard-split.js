@@ -152,8 +152,16 @@ var lastPitches = new Array(MAX_REGIONS);
 for (var i = 0; i < MAX_REGIONS; i++) lastPitches[i] = null;
 var prevRegion = -1;
 
+// Parallel sparse arrays keyed by the controller's NoteOn pitch.
+// On NoteOff we look up both the output channel and the (possibly
+// transposed) output pitch so the synth gets a NoteOff that matches
+// the NoteOn it heard. Without noteToPitch a transposed note hangs.
 var noteToChannel = new Array(128);
-for (var i = 0; i < 128; i++) noteToChannel[i] = null;
+var noteToPitch = new Array(128);
+for (var i = 0; i < 128; i++) {
+    noteToChannel[i] = null;
+    noteToPitch[i] = null;
+}
 
 // @inject:split-router
 /**
@@ -260,6 +268,49 @@ function routeNote(pitch, lowerBounds, upperBounds, lastPitches, prevRegion) {
  */
 function transposeByOctaves(pitch, octaves) {
     return Math.max(0, Math.min(127, pitch + octaves * 12));
+}
+
+/**
+ * Route a NoteOn: pick a region, set the event's channel and
+ * (possibly transposed) pitch, and remember both per controller
+ * pitch so the matching NoteOff can mirror them. Returns the chosen
+ * region index — the caller stores this as the new prevRegion.
+ *
+ * Tracking both channel AND output pitch is what stops transposed
+ * notes from hanging: a NoteOn sent at the transposed pitch must
+ * be paired with a NoteOff at the same transposed pitch, even
+ * though the controller's NoteOff carries the original pitch.
+ *
+ * Mutates event.pitch, event.channel, noteToChannel, noteToPitch.
+ */
+function routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch) {
+    var originalPitch = event.pitch;
+    var idx = routeNote(originalPitch, cache.lowerBounds, cache.upperBounds, lastPitches, prevRegion);
+    var ch = cache.regionChannels[idx];
+    var outPitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
+    event.pitch = outPitch;
+    event.channel = ch;
+    noteToChannel[originalPitch] = ch;
+    noteToPitch[originalPitch] = outPitch;
+    return idx;
+}
+
+/**
+ * Route a NoteOff: if the original pitch has a remembered NoteOn,
+ * rewrite the event's channel/pitch to match what the synth heard
+ * and clear the slot. Returns true if the caller should send the
+ * event as-is; false means there is no recorded pairing and the
+ * caller should fan out across cache.failsafeChannels.
+ */
+function routeNoteOff(event, noteToChannel, noteToPitch) {
+    var originalPitch = event.pitch;
+    var ch = noteToChannel[originalPitch];
+    if (ch === null || ch === undefined) return false;
+    event.channel = ch;
+    event.pitch = noteToPitch[originalPitch];
+    noteToChannel[originalPitch] = null;
+    noteToPitch[originalPitch] = null;
+    return true;
 }
 // @end-inject
 
@@ -376,30 +427,15 @@ rebuildCache();
 
 function HandleMIDI(event) {
     if (event instanceof NoteOn) {
-        var originalPitch = event.pitch;
-        var idx = routeNote(
-            originalPitch,
-            cache.lowerBounds,
-            cache.upperBounds,
-            lastPitches,
-            prevRegion
-        );
-        prevRegion = idx;
-        var targetChannel = cache.regionChannels[idx];
-        event.pitch = transposeByOctaves(originalPitch, cache.regionTransposes[idx]);
-        event.channel = targetChannel;
-        noteToChannel[originalPitch] = targetChannel;
+        prevRegion = routeNoteOn(event, cache, lastPitches, prevRegion, noteToChannel, noteToPitch);
         event.send();
         return;
     }
     if (event instanceof NoteOff) {
-        var recorded = noteToChannel[event.pitch];
-        if (recorded !== null && recorded !== undefined) {
-            event.channel = recorded;
+        if (routeNoteOff(event, noteToChannel, noteToPitch)) {
             event.send();
-            noteToChannel[event.pitch] = null;
         } else {
-            // Failsafe: a NoteOff arrived with no recorded NoteOn channel
+            // Failsafe: a NoteOff arrived with no recorded NoteOn pairing
             // (e.g. script started mid-note). Fan out to every active
             // region channel so the note doesn't hang.
             var chs = cache.failsafeChannels;
