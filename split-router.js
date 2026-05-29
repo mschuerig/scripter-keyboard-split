@@ -1,96 +1,104 @@
 /**
- * Routing with split-mode selection (Fixed or Floating).
+ * N-region keyboard split router.
  *
- * Fixed mode: pitch >= baseSplit goes to the upper region, otherwise lower.
+ * The keyboard is divided by N split points into N+1 contiguous regions,
+ * numbered from 0 (lowest pitches) to N (highest). Each split point has
+ * a Floating Range Above and Below (in semitones) that defines how far
+ * the two adjacent regions can extend past the split. Region k's claim
+ * zone is:
+ *   [splitPoints[k-1] - floatingRanges[k-1].below,
+ *    splitPoints[k]   + floatingRanges[k].above]
+ * with -Infinity below region 0 and +Infinity above region N.
  *
- * Floating mode: tracks the most recent note in each region separately.
- * A new note is assigned to the region whose recent note is closest,
- * within that region's floating range. This handles two-handed playing
- * (alternating or crossing hands) without the split thrashing between
- * independent lines.
+ * A region can claim a pitch only if the pitch falls inside its claim
+ * zone — the floating range is a hard bound on how far the region
+ * extends, not a stay-with reach from the last pitch.
  *
- * Returns the routed channel (1 = upper, 2 = lower) plus the updated
- * lastPitchUpper / lastPitchLower values. Callers carry that state
- * into the next call.
+ * When multiple regions claim, the choice goes:
+ *   1. If there is a previous-note region and it is among the
+ *      candidates, it keeps the note UNLESS another candidate's
+ *      last-played pitch is more than STAY_BUFFER semitones closer
+ *      to the new pitch than prev's. This "follow-the-hand" rule
+ *      lets a melody continuing through the prev region's claim zone
+ *      stay there, while still allowing a clearly-closer other hand
+ *      to win (e.g. two-handed organ pattern, where the other
+ *      region's recent note is much closer than the freshly-played
+ *      one in prev). The buffer prevents a stale or coincidental
+ *      last-pitch in another region from narrowly beating prev.
+ *   2. Otherwise the candidate whose last-played pitch is closest in
+ *      semitones wins; regions with no last pitch are treated as
+ *      infinitely far; ties go to the higher region index.
+ *
+ * Setting both ranges of a split to 0 collapses it into a hard line —
+ * the two adjacent claim zones meet only at the split point itself.
+ *
+ * Caller responsibilities:
+ *   - splitPoints must be sorted ascending and aligned with
+ *     floatingRanges (the Scripter wrapper does this in rebuildCache).
+ *   - lastPitches is mutated in place: lastPitches[chosen] is set to
+ *     the new pitch before this function returns.
+ *   - prevRegion tracks the region returned by the most recent call
+ *     (or -1 if there has been none). The caller stores the return
+ *     value of this call and passes it as prevRegion next time.
+ *
+ * Returns the chosen region index. The caller maps it to a MIDI
+ * channel and transposition.
  *
  * Body uses ES5-friendly constructs (var, function declarations) so it
  * can be inlined into the MainStage Scripter file by build.js.
  */
-export function routeNote(input) {
-    var pitch = input.pitch;
-    var lastPitchUpper = input.lastPitchUpper;
-    var lastPitchLower = input.lastPitchLower;
-    var baseSplit = input.baseSplit;
-    var floatingRangeAbove = input.floatingRangeAbove;
-    var floatingRangeBelow = input.floatingRangeBelow;
-    var splitMode = input.splitMode;
-    if (splitMode === undefined || splitMode === null) {
-        splitMode = 1;
+
+var STAY_BUFFER = 2;
+
+export function routeNote(pitch, splitPoints, floatingRanges, lastPitches, prevRegion) {
+    var N = splitPoints.length;
+    var numRegions = N + 1;
+
+    var candidateCount = 0;
+    var soleCandidate = -1;
+    var prevIsCandidate = false;
+    var bestRegion = -1;
+    var bestDist = Infinity;
+
+    for (var k = 0; k < numRegions; k++) {
+        var lower = k > 0
+            ? splitPoints[k - 1] - floatingRanges[k - 1].below
+            : -Infinity;
+        var upper = k < N
+            ? splitPoints[k] + floatingRanges[k].above
+            : Infinity;
+        if (pitch < lower || pitch > upper) continue;
+
+        candidateCount++;
+        soleCandidate = k;
+        if (k === prevRegion) prevIsCandidate = true;
+
+        var lp = lastPitches[k];
+        var dist = (lp !== null && lp !== undefined)
+            ? Math.abs(pitch - lp)
+            : Infinity;
+        // Ascending iteration; `<=` sends ties to the higher index.
+        if (bestRegion === -1 || dist <= bestDist) {
+            bestRegion = k;
+            bestDist = dist;
+        }
     }
 
-    var channel;
-    var newLastPitchUpper = lastPitchUpper;
-    var newLastPitchLower = lastPitchLower;
-
-    if (splitMode === 0) {
-        if (pitch >= baseSplit) {
-            channel = 1;
-            newLastPitchUpper = pitch;
-        } else {
-            channel = 2;
-            newLastPitchLower = pitch;
-        }
-        return {
-            channel: channel,
-            newLastPitchUpper: newLastPitchUpper,
-            newLastPitchLower: newLastPitchLower
-        };
-    }
-
-    var upperLow = baseSplit;
-    var upperHigh = baseSplit + floatingRangeAbove;
-    var lowerLow = baseSplit - floatingRangeBelow;
-    var lowerHigh = baseSplit;
-
-    var canStayWithUpper = lastPitchUpper !== null &&
-        Math.abs(pitch - lastPitchUpper) <= floatingRangeBelow;
-    var canStayWithLower = lastPitchLower !== null &&
-        Math.abs(pitch - lastPitchLower) <= floatingRangeAbove;
-
-    var inUpperRange = pitch >= upperLow && pitch <= upperHigh;
-    var inLowerRange = pitch >= lowerLow && pitch <= lowerHigh;
-
-    if ((inUpperRange || canStayWithUpper) && (inLowerRange || canStayWithLower)) {
-        var distToUpper = lastPitchUpper !== null ? Math.abs(pitch - lastPitchUpper) : Infinity;
-        var distToLower = lastPitchLower !== null ? Math.abs(pitch - lastPitchLower) : Infinity;
-        if (distToUpper <= distToLower) {
-            channel = 1;
-            newLastPitchUpper = pitch;
-        } else {
-            channel = 2;
-            newLastPitchLower = pitch;
-        }
-    } else if (inUpperRange || canStayWithUpper) {
-        channel = 1;
-        newLastPitchUpper = pitch;
-    } else if (inLowerRange || canStayWithLower) {
-        channel = 2;
-        newLastPitchLower = pitch;
+    var chosen;
+    if (candidateCount === 1) {
+        chosen = soleCandidate;
+    } else if (prevIsCandidate) {
+        var prevPitch = lastPitches[prevRegion];
+        var prevDist = (prevPitch !== null && prevPitch !== undefined)
+            ? Math.abs(pitch - prevPitch)
+            : Infinity;
+        chosen = bestDist + STAY_BUFFER < prevDist ? bestRegion : prevRegion;
     } else {
-        if (pitch >= baseSplit) {
-            channel = 1;
-            newLastPitchUpper = pitch;
-        } else {
-            channel = 2;
-            newLastPitchLower = pitch;
-        }
+        chosen = bestRegion;
     }
 
-    return {
-        channel: channel,
-        newLastPitchUpper: newLastPitchUpper,
-        newLastPitchLower: newLastPitchLower
-    };
+    lastPitches[chosen] = pitch;
+    return chosen;
 }
 
 /**
