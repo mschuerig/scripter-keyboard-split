@@ -68,42 +68,46 @@ same setup.
 
 ## The controls
 
-The Scripter window lists controls from the lowest region of the
-keyboard at the top to the highest at the bottom. **Region 1** is the
-lowest region, Region 2 the next one up, and so on. **Split Point 1**
-is the lowest split. Increasing **Number of Splits** reveals more
-rows at the bottom of the list; decreasing it hides them.
+The Scripter window lists controls from the highest region of the
+keyboard at the top to the lowest at the bottom. **Region 1** is the
+highest region, Region 2 the next one down, and so on. **Split Point
+N** is the boundary between Region N and Region N+1. Increasing
+**Number of Splits** reveals more rows at the bottom of the list (=
+adds a new region at the bottom of the keyboard); decreasing it hides
+them.
 
 | Control | What it does |
 |---|---|
 | **Number of Splits** | How many split points are active (1–3). One split gives two regions, two splits give three, and so on. The rows for splits and regions you aren't using are hidden. |
-| **Region N Channel** | The MIDI channel notes assigned to Region N are sent on. Defaults: `2, 1, 3, 4` — so the single-split case matches the Hammond convention (upper manual on channel 1, lower on channel 2). |
+| **Region N Channel** | The MIDI channel notes assigned to Region N are sent on. Defaults: `1, 2, 3, 4` — Region 1 (the topmost region, typically the upper manual or the main melody hand) is on channel 1 by convention. |
 | **Region N Transpose** | Shift Region N up or down by whole octaves. Common choice for the bottom region with a Hammond setup: `-1`, so your left hand at middle C plays the lower end of the lower manual. |
-| **Split Point N** | The note where split N divides the keyboard. `60` is middle C. A pitch equal to a split point goes to the region above it. The numbering does not impose pitch order — if you set Split Point 2 below Split Point 1, the script sorts them internally. |
+| **Split Point N** | The note where split N divides the keyboard. `60` is middle C. A pitch equal to a split point goes to the region above it. The numbering does not impose pitch order — if you set Split Point 2 above Split Point 1, the script sorts them internally. |
 | **Floating Range Above N / Floating Range Below N** | How many semitones above/below Split Point N the adjacent regions are allowed to claim. This is a hard upper bound on each region's reach — a region cannot extend past its floating range, no matter where its last-played note was. **Both set to 0** = a hard, fixed split. Larger numbers = each region is willing to claim more pitches past the line, and the closer-last-pitch wins inside the overlap zone. |
 
 ### Sensible starting points
 
 - **Hammond-style organ, two manuals** — Number of Splits `1 split
   (2 regions)`, Split Point 1 `60`, Floating Range Above 1 = Floating
-  Range Below 1 = `3`. Defaults already give Region 1 (lower manual)
-  channel `2`, Region 2 (upper manual) channel `1`. Set Region 1
+  Range Below 1 = `3`. Defaults already give Region 1 (upper manual)
+  channel `1`, Region 2 (lower manual) channel `2`. Set Region 2
   Transpose to `-1`.
 - **Piano right, bass left** — Number of Splits `1 split (2
   regions)`, Split Point 1 around `48` (C below middle C), Floating
-  Range Above 1 = Floating Range Below 1 = `0` (hard split). Region 1
+  Range Above 1 = Floating Range Below 1 = `0` (hard split). Region 2
   Transpose `-1` or `-2` if needed.
 - **Hammond with a bass pedal zone** — Number of Splits `2 splits (3
-  regions)`, Split Point 1 around `48`, Split Point 2 around `60`.
-  For the bass split (Split 1) try Floating Range `0 / 0` — a hard
-  boundary so the bass never leaks up. For the manual split (Split 2)
-  try Floating Range `3 / 3`. Region 1 (bass) channel `3`, Region 2
-  (lower manual) channel `2`, Region 3 (upper manual) channel `1`.
-  Region 1 Transpose `-2` if the bass patch sits below where your
-  hand falls.
-- **Sound effects on the top few keys** — set the highest Split
-  Point to about `96`–`108`, set its floating ranges to `0 / 0` (hard
-  line), and assign that region's channel to a separate FX instrument.
+  regions)`, Split Point 1 around `60` (between upper and lower
+  manuals), Split Point 2 around `48` (between lower manual and
+  bass). For the manual split (Split 1) try Floating Range `3 / 3`;
+  for the bass split (Split 2) try Floating Range `0 / 0` — a hard
+  boundary so the bass never leaks up. Defaults give Region 1 (upper
+  manual) channel `1`, Region 2 (lower manual) channel `2`, Region 3
+  (bass) channel `3`. Region 3 Transpose `-2` if the bass patch sits
+  below where your hand falls.
+- **Sound effects on the top few keys** — set Split Point 1 to about
+  `96`–`108` (separating the FX zone from everything below), set its
+  floating ranges to `0 / 0` (hard line), and assign Region 1's
+  channel to a separate FX instrument.
 
 ## Setting up the receiving plugin
 
@@ -190,9 +194,13 @@ need any of this to use the plugin.*
 
 ### How the algorithm works
 
-- The keyboard is divided by N split points into N+1 regions. Region 0
-  is the lowest, Region N the highest. Each split has a Floating
-  Range Above and Below (in semitones).
+- The keyboard is divided by N split points into N+1 regions. The
+  router indexes them zero-based by pitch — router region 0 is the
+  lowest pitch range, router region N is the highest. (The UI labels
+  these in the opposite order: UI Region 1 = router region N = top,
+  UI Region N+1 = router region 0 = bottom. The wrapper translates
+  between them in `rebuildCache`.) Each split has a Floating Range
+  Above and Below (in semitones).
 - Each region has a **claim zone** in pitch:
     - Region 0: `(-∞, splitPoints[0] + above_0]`
     - Region k (middle): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`

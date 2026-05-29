@@ -8,11 +8,13 @@
  * region claim a band of pitches past the split and hold onto notes
  * that briefly cross over.
  *
- * Region 1 is the lowest region of the keyboard; Region N+1 the
- * highest. After sorting, Split Point 1 is the lowest split. The
- * parameter list is interleaved low-to-high — Region 1, Split 1,
- * Region 2, Split 2, … — so adjusting Number of Splits reveals or
- * hides rows at the bottom of the list without shifting the rest.
+ * Region 1 is the highest region of the keyboard — typically the
+ * upper manual or the right-hand melody — and Region N+1 the lowest.
+ * Split Point i is the boundary between Region i and Region i+1.
+ * The parameter list reads top-of-keyboard at the top — Region 1,
+ * Split 1, Region 2, Split 2, … — so adjusting Number of Splits
+ * reveals or hides rows at the bottom of the list (= bottom of the
+ * keyboard) without shifting the rest.
  *
  * Hot-path discipline: HandleMIDI reads only the pre-computed
  * cache. rebuildCache is the only function that mutates routing
@@ -33,10 +35,10 @@ var DEFAULT_NUM_SPLITS = 1;
 var DEFAULT_SPLIT_POINT = 60;
 var DEFAULT_RANGE_ABOVE = 3;
 var DEFAULT_RANGE_BELOW = 3;
-// Region channels default to: R1=2, R2=1 (preserves the original
-// "Lower=2, Upper=1" Hammond-style mapping for the single-split case);
-// R3=3, R4=4 give each additional region a distinct channel by default.
-var DEFAULT_REGION_CHANNELS = [null, 2, 1, 3, 4];
+// Region channels default to R_i = i. Region 1 is the topmost region
+// (typically the upper manual or the main melody hand on a Hammond)
+// and conventionally lives on MIDI channel 1.
+var DEFAULT_REGION_CHANNELS = [null, 1, 2, 3, 4];
 var DEFAULT_REGION_TRANSPOSE = 0;
 
 var PluginParameters = [];
@@ -301,6 +303,10 @@ function rebuildCache() {
     }
 
     // Region channels and transposes, plus deduplicated failsafe set.
+    // Router region index i goes 0 (lowest pitch) to N (highest), but
+    // the UI labels regions top-down: Region 1 is the topmost (router
+    // index N), Region N+1 the bottommost (router index 0). Map raw
+    // UI-keyed values into router-keyed slots accordingly.
     var chs = cache.regionChannels;
     var trs = cache.regionTransposes;
     var failsafe = cache.failsafeChannels;
@@ -308,9 +314,10 @@ function rebuildCache() {
     trs.length = numRegions;
     failsafe.length = 0;
     for (var i = 0; i < numRegions; i++) {
-        var ch = rawRegionChannels[i + 1];
+        var uiLabel = numRegions - i;
+        var ch = rawRegionChannels[uiLabel];
         chs[i] = ch;
-        trs[i] = rawRegionTransposes[i + 1];
+        trs[i] = rawRegionTransposes[uiLabel];
         var seen = false;
         for (var j = 0; j < failsafe.length; j++) {
             if (failsafe[j] === ch) { seen = true; break; }

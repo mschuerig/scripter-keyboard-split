@@ -72,19 +72,20 @@ Konfiguration kombinieren.
 
 ## Die Bedienelemente
 
-Das Scripter-Fenster listet die Regler von der untersten Region der
-Tastatur (oben in der Liste) bis zur obersten (unten in der Liste).
-**Region 1** ist die unterste Region, Region 2 die nächste darüber
-und so weiter. **Split Point 1** ist der unterste Splitpunkt. Wenn
-du **Number of Splits** erhöhst, erscheinen weitere Zeilen am Ende
-der Liste; wenn du es verringerst, verschwinden sie wieder.
+Das Scripter-Fenster listet die Regler von der obersten Region der
+Tastatur (oben in der Liste) bis zur untersten (unten in der Liste).
+**Region 1** ist die oberste Region, Region 2 die nächste darunter
+und so weiter. **Split Point N** ist die Grenze zwischen Region N
+und Region N+1. Wenn du **Number of Splits** erhöhst, erscheinen
+weitere Zeilen am Ende der Liste (= eine neue Region am unteren Ende
+der Tastatur); wenn du es verringerst, verschwinden sie wieder.
 
 | Regler | Wirkung |
 |---|---|
 | **Number of Splits** | Wie viele Splitpunkte aktiv sind (1–3). Ein Split ergibt zwei Regionen, zwei Splits drei und so weiter. Die Zeilen für nicht benötigte Splits und Regionen werden ausgeblendet. |
-| **Region N Channel** | Der MIDI-Kanal, auf dem Noten der Region N gesendet werden. Voreinstellungen: `2, 1, 3, 4` — so passt der Ein-Split-Fall zur Hammond-Konvention (Obermanual auf Kanal 1, Untermanual auf Kanal 2). |
+| **Region N Channel** | Der MIDI-Kanal, auf dem Noten der Region N gesendet werden. Voreinstellungen: `1, 2, 3, 4` — Region 1 (die oberste Region, typisch das Obermanual oder die rechte Melodiehand) liegt konventionell auf Kanal 1. |
 | **Region N Transpose** | Region N in ganzen Oktaven nach oben oder unten verschieben. Typisch für die unterste Region in einem Hammond-Setup: `-1`, damit deine linke Hand am eingestrichenen C den unteren Bereich des Untermanuals spielt. |
-| **Split Point N** | Die Note, an der Split N die Tastatur teilt. `60` ist das eingestrichene C. Eine Note exakt auf einem Splitpunkt geht in die Region oberhalb. Die Nummerierung gibt keine Reihenfolge der Tonhöhen vor — wenn du Split Point 2 unter Split Point 1 setzt, sortiert das Skript intern. |
+| **Split Point N** | Die Note, an der Split N die Tastatur teilt. `60` ist das eingestrichene C. Eine Note exakt auf einem Splitpunkt geht in die Region oberhalb. Die Nummerierung gibt keine Reihenfolge der Tonhöhen vor — wenn du Split Point 2 über Split Point 1 setzt, sortiert das Skript intern. |
 | **Floating Range Above N / Floating Range Below N** | Wie viele Halbtöne oberhalb/unterhalb von Split N die angrenzenden Regionen beanspruchen dürfen. Das ist eine harte Obergrenze für die Reichweite jeder Region — eine Region kann sich nicht weiter ausdehnen als ihre Floating Range, egal wo ihre letzte Note lag. **Beide auf 0** = ein harter, starrer Split. Größere Werte = jede Region darf mehr Noten jenseits der Linie für sich beanspruchen, und im Überlappungsbereich gewinnt diejenige, deren letzte Note näher liegt. |
 
 ### Sinnvolle Startwerte
@@ -92,25 +93,26 @@ der Liste; wenn du es verringerst, verschwinden sie wieder.
 - **Hammond-Orgel mit zwei Manualen** — Number of Splits `1 split
   (2 regions)`, Split Point 1 `60`, Floating Range Above 1 = Floating
   Range Below 1 = `3`. Die Voreinstellungen geben Region 1
-  (Untermanual) Kanal `2` und Region 2 (Obermanual) Kanal `1`. Region
-  1 Transpose auf `-1`.
+  (Obermanual) Kanal `1` und Region 2 (Untermanual) Kanal `2`. Region
+  2 Transpose auf `-1`.
 - **Klavier rechts, Bass links** — Number of Splits `1 split (2
   regions)`, Split Point 1 etwa `48` (das C unterhalb des
   eingestrichenen C), Floating Range Above 1 = Floating Range Below 1
-  = `0` (harter Split). Region 1 Transpose `-1` oder `-2`, falls
+  = `0` (harter Split). Region 2 Transpose `-1` oder `-2`, falls
   nötig.
 - **Hammond mit Basspedal-Bereich** — Number of Splits `2 splits (3
-  regions)`, Split Point 1 etwa `48`, Split Point 2 etwa `60`. Für
-  den Bass-Split (Split 1) bietet sich Floating Range `0 / 0` an —
-  eine harte Grenze, damit der Bass nicht nach oben leckt. Für den
-  Manual-Split (Split 2) z.B. Floating Range `3 / 3`. Region 1 (Bass)
-  Kanal `3`, Region 2 (Untermanual) Kanal `2`, Region 3 (Obermanual)
-  Kanal `1`. Region 1 Transpose `-2`, falls dein Basssound unterhalb
-  deiner Handlage sitzt.
-- **Sound-Effekte auf den obersten Tasten** — den höchsten Split
-  Point auf etwa `96`–`108` setzen, Floating Range `0 / 0` (harte
-  Linie) und den Kanal dieser Region einem separaten FX-Instrument
-  zuweisen.
+  regions)`, Split Point 1 etwa `60` (zwischen Ober- und Untermanual),
+  Split Point 2 etwa `48` (zwischen Untermanual und Bass). Für den
+  Manual-Split (Split 1) z.B. Floating Range `3 / 3`; für den Bass-
+  Split (Split 2) Floating Range `0 / 0` — eine harte Grenze, damit
+  der Bass nicht nach oben leckt. Voreinstellungen: Region 1
+  (Obermanual) Kanal `1`, Region 2 (Untermanual) Kanal `2`, Region 3
+  (Bass) Kanal `3`. Region 3 Transpose `-2`, falls dein Basssound
+  unterhalb deiner Handlage sitzt.
+- **Sound-Effekte auf den obersten Tasten** — Split Point 1 auf etwa
+  `96`–`108` setzen (trennt die FX-Zone von allem darunter), Floating
+  Range `0 / 0` (harte Linie) und den Kanal von Region 1 einem
+  separaten FX-Instrument zuweisen.
 
 ## Empfänger-Plug-in einrichten
 
@@ -202,9 +204,13 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
 
 ### Wie der Algorithmus funktioniert
 
-- Die Tastatur wird von N Splitpunkten in N+1 Regionen geteilt.
-  Region 0 ist die unterste, Region N die oberste. Jeder Splitpunkt
-  hat eine Floating Range Above und Below (in Halbtönen).
+- Die Tastatur wird von N Splitpunkten in N+1 Regionen geteilt. Der
+  Router indiziert sie null-basiert nach Tonhöhe — Router-Region 0
+  ist die tiefste Tonhöhenregion, Router-Region N die höchste. (Die
+  UI-Beschriftung läuft anders herum: UI Region 1 = Router-Region N
+  = oben, UI Region N+1 = Router-Region 0 = unten. Das Wrapper-
+  Skript übersetzt das in `rebuildCache`.) Jeder Splitpunkt hat eine
+  Floating Range Above und Below (in Halbtönen).
 - Jede Region hat eine **Claim Zone** in Tonhöhen:
     - Region 0: `(-∞, splitPoints[0] + above_0]`
     - Region k (Mitte): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`
