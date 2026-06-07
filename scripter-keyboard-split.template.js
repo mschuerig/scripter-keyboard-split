@@ -1,8 +1,8 @@
 /**
  * scripter-keyboard-split — MainStage / Logic Pro Scripter plugin
  *
- * Version: 0.1.0
- * This version: https://github.com/mschuerig/scripter-keyboard-split/blob/v0.1.0/scripter-keyboard-split.js
+ * Version: 0.1.1
+ * This version: https://github.com/mschuerig/scripter-keyboard-split/blob/v0.1.1/scripter-keyboard-split.js
  * Latest version: https://github.com/mschuerig/scripter-keyboard-split/blob/main/scripter-keyboard-split.js
  * Project home: https://github.com/mschuerig/scripter-keyboard-split
  *
@@ -199,7 +199,11 @@ function rebuildCache() {
         sortBelow[j] = bl;
     }
 
-    // Per-zone claim bounds. Edge zones are unbounded.
+    // Per-zone claim bounds. Edge zones are unbounded. The split
+    // point itself always belongs to the upper zone; with above = 0
+    // (hard split) the lower zone's ceiling is split - 1 so the
+    // boundary note can't be pulled into lower by the
+    // follow-the-hand bias.
     var lo = cache.lowerBounds;
     var hi = cache.upperBounds;
     lo.length = numZones;
@@ -207,7 +211,7 @@ function rebuildCache() {
     lo[0] = -Infinity;
     hi[N] = Infinity;
     for (var i = 0; i < N; i++) {
-        hi[i] = sortPts[i] + sortAbove[i];
+        hi[i] = sortAbove[i] > 0 ? sortPts[i] + sortAbove[i] : sortPts[i] - 1;
         lo[i + 1] = sortPts[i] - sortBelow[i];
     }
 

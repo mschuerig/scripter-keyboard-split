@@ -5,19 +5,14 @@
 Ein Skript für das **Scripter-Plug-in von MainStage / Logic Pro**, das
 deine MIDI-Tastatur in bis zu vier Zonen aufteilt und jede auf
 einem eigenen MIDI-Kanal sendet — damit du z.B. das obere und untere
-Manual einer Hammond-Orgel auf einer einzigen Tastatur spielen kannst,
-ohne dass dir der Splitpunkt beim zweihändigen Spiel in die Quere
-kommt. Eine dritte oder vierte Zone kannst du für einen Basspedal-
+Manual einer Hammond-Orgel auf einer einzigen Tastatur spielen
+kannst. Eine dritte oder vierte Zone kannst du für einen Basspedal-
 Bereich, eine Lead-Stimme oder ein paar Tasten mit Sound-Effekten
 hinzunehmen.
 
-> **Frühes Stadium.** Harte Splits (Floating Range Above und Below
-> beide auf `0`) sollten zuverlässig laufen — das ist einfach eine
-> starre Linie auf der Tastatur. Die smarte Logik mit Floating Ranges
-> größer als 0 ist neuer und kann in Randfällen noch überraschen.
-> Wenn dir mitten in einer Phrase etwas merkwürdig vorkommt, ist der
-> schnellste Ausweg, die Floating Range Above und Below des
-> betreffenden Splits auf `0` zu setzen.
+Jeder Split ist eine starre Linie auf der Tastatur: Noten ab dem
+Splitpunkt aufwärts gehen in die obere Zone, Noten darunter in die
+untere.
 
 ## Warum das nützlich ist
 
@@ -26,14 +21,6 @@ hinzunehmen.
 - MainStage schickt Splits immer auf separate Channel-Strips, auch
   wenn ein einzelnes Plug-in das genauso gut (oder besser) erledigen
   könnte.
-
-Jeder Splitpunkt hat eine **Floating Range** ober- und unterhalb.
-Beide auf `0` gesetzt ergeben einen klassischen harten Split — eine
-starre Linie. Auf ein paar Halbtöne gesetzt entsteht ein **smarter
-Split**, der jeder Hand unabhängig folgt: Jede Hand "hält" ihre Seite
-der Tastatur innerhalb dieser Floating Range, auch wenn die Noten
-kurz hinüberreichen. Du kannst harte und smarte Splits in einer
-Konfiguration kombinieren.
 
 ## Was du brauchst
 
@@ -86,33 +73,32 @@ der Tastatur); wenn du es verringerst, verschwinden sie wieder.
 | **Zone N Channel** | Der MIDI-Kanal, auf dem Noten der Zone N gesendet werden. Voreinstellungen: `1, 2, 3, 4` — Zone 1 (die oberste Zone, typisch das Obermanual oder die rechte Melodiehand) liegt konventionell auf Kanal 1. |
 | **Zone N Transpose** | Zone N in ganzen Oktaven nach oben oder unten verschieben. Typisch für die unterste Zone in einem Hammond-Setup: `-1`, damit deine linke Hand am eingestrichenen C den unteren Bereich des Untermanuals spielt. |
 | **Split Point N** | Die Note, an der Split N die Tastatur teilt. `60` ist das eingestrichene C. Eine Note exakt auf einem Splitpunkt geht in die Zone oberhalb. Die Nummerierung gibt keine Reihenfolge der Tonhöhen vor — wenn du Split Point 2 über Split Point 1 setzt, sortiert das Skript intern. |
-| **Floating Range Above N / Floating Range Below N** | Wie viele Halbtöne oberhalb/unterhalb von Split N die angrenzenden Zonen beanspruchen dürfen. Das ist eine harte Obergrenze für die Reichweite jeder Zone — eine Zone kann sich nicht weiter ausdehnen als ihre Floating Range, egal wo ihre letzte Note lag. **Beide auf 0** = ein harter, starrer Split. Größere Werte = jede Zone darf mehr Noten jenseits der Linie für sich beanspruchen, und im Überlappungsbereich gewinnt diejenige, deren letzte Note näher liegt. |
+| **Floating Range Above N / Floating Range Below N** | **Experimentell — beide bitte auf `0` lassen.** Werte größer als `0` aktivieren einen "smarten Split", bei dem jede Zone ein paar Halbtöne über die Linie greift; dieser Modus hat bekannte Fehler bei Akkorden. Siehe [Experimentell: Floating Ranges](#experimentell-floating-ranges) am Ende. |
 
 ### Sinnvolle Startwerte
 
+Lass in allen Beispielen unten Floating Range Above und Below auf
+jedem Split bei `0` (harte Linie). Die smarte Variante ist
+experimentell — siehe den Abschnitt am Ende.
+
 - **Hammond-Orgel mit zwei Manualen** — Number of Splits `1 split
-  (2 zones)`, Split Point 1 `60`, Floating Range Above 1 = Floating
-  Range Below 1 = `3`. Die Voreinstellungen geben Zone 1
+  (2 zones)`, Split Point 1 `60`. Die Voreinstellungen geben Zone 1
   (Obermanual) Kanal `1` und Zone 2 (Untermanual) Kanal `2`. Zone
   2 Transpose auf `-1`.
 - **Klavier rechts, Bass links** — Number of Splits `1 split (2
   zones)`, Split Point 1 etwa `48` (das C unterhalb des
-  eingestrichenen C), Floating Range Above 1 = Floating Range Below 1
-  = `0` (harter Split). Zone 2 Transpose `-1` oder `-2`, falls
+  eingestrichenen C). Zone 2 Transpose `-1` oder `-2`, falls
   nötig.
 - **Hammond mit Basspedal-Bereich** — Number of Splits `2 splits (3
   zones)`, Split Point 1 etwa `60` (zwischen Ober- und Untermanual),
-  Split Point 2 etwa `48` (zwischen Untermanual und Bass). Für den
-  Manual-Split (Split 1) z.B. Floating Range `3 / 3`; für den Bass-
-  Split (Split 2) Floating Range `0 / 0` — eine harte Grenze, damit
-  der Bass nicht nach oben leckt. Voreinstellungen: Zone 1
-  (Obermanual) Kanal `1`, Zone 2 (Untermanual) Kanal `2`, Zone 3
-  (Bass) Kanal `3`. Zone 3 Transpose `-2`, falls dein Basssound
-  unterhalb deiner Handlage sitzt.
+  Split Point 2 etwa `48` (zwischen Untermanual und Bass).
+  Voreinstellungen: Zone 1 (Obermanual) Kanal `1`, Zone 2
+  (Untermanual) Kanal `2`, Zone 3 (Bass) Kanal `3`. Zone 3
+  Transpose `-2`, falls dein Basssound unterhalb deiner Handlage
+  sitzt.
 - **Sound-Effekte auf den obersten Tasten** — Split Point 1 auf etwa
-  `96`–`108` setzen (trennt die FX-Zone von allem darunter), Floating
-  Range `0 / 0` (harte Linie) und den Kanal von Zone 1 einem
-  separaten FX-Instrument zuweisen.
+  `96`–`108` setzen (trennt die FX-Zone von allem darunter) und den
+  Kanal von Zone 1 einem separaten FX-Instrument zuweisen.
 
 ## Empfänger-Plug-in einrichten
 
@@ -128,38 +114,6 @@ entsprechenden Zone-Zeile oben steht.
 
 **Für einen multitimbralen Sampler:** Ordne jeden Klang dem Kanal der
 Zone zu, die ihn auslösen soll.
-
-## Beispiel: Warum ein smarter Split etwas bringt
-
-Stell dir vor, deine rechte Hand spielt eine absteigende Melodie —
-`E4, D4, C4, H3` (MIDI-Noten `64, 62, 60, 59`) — während die linke
-Hand zwischen jedem rechten Anschlag ein `E3` (Note `52`) tritt. Du
-spielst also tatsächlich:
-
-```
-64, 52, 62, 52, 60, 52, 59
-```
-
-Mit einem **harten Split bei Note 60** (Floating Ranges `0 / 0`):
-- `64` → oben ✓
-- `52` → unten ✓
-- `62` → oben ✓
-- `52` → unten ✓
-- `60` → oben ✓
-- `52` → unten ✓
-- `59` → **unten** ✗ — dein rechtes H landet mitten in der Phrase
-  plötzlich auf dem Untermanual.
-
-Mit **Floating Range Above und Below auf 3** reicht jede Zone `3`
-Halbtöne über den Splitpunkt hinaus — beide Zonen können die Noten
-zwischen `57` und `63` für sich beanspruchen, und es gewinnt die mit
-der näher liegenden letzten Note. Die rechte Hand bewegt sich um
-`60–64`; wenn das `59` kommt, ist es näher am rechten `60` als am
-linken `52`, und die Melodie bleibt geschlossen auf dem Obermanual.
-
-Das Prinzip gilt auch mit mehr Splits: Jede Zone merkt sich ihre
-eigene letzte Note, sodass ein Walking Bass unter einem Akkord und
-darüber einer Melodiestimme nicht ineinander rutschen.
 
 ## Fehlersuche
 
@@ -180,16 +134,66 @@ treten meist nur dann auf, wenn das Skript gestartet wurde, während
 eine Taste gerade gedrückt war.
 
 **Noten springen manchmal in die falsche Zone.**
-Probier kleinere Floating Ranges. Je größer der Bereich, desto eher
-greift eine Zone über einen Splitpunkt hinaus. Wenn du an diesem
-Split ohnehin strikt getrennte Stimmen spielst, setz die Floating
-Ranges auf `0`.
+Stell sicher, dass Floating Range Above und Below auf jedem Split
+auf `0` stehen. Werte größer als `0` aktivieren die experimentelle
+Smart-Split-Logik, die [bekannte Fehler](KNOWN_ISSUES.md) bei
+Akkorden hat.
 
 **Wo finde ich die aktuelle Datei?**
 Die aktuelle Version von `scripter-keyboard-split.js` liegt im
 Hauptverzeichnis dieses Repositories. Über den "Raw"-Button bei
 GitHub kannst du den Inhalt direkt kopieren oder das ganze Repository
 als ZIP herunterladen.
+
+## Experimentell: Floating Ranges
+
+> **Experimentell und fehlerhaft.** Die Smart-Split-Logik, die
+> durch Floating Ranges größer als `0` aktiviert wird, hat offene
+> Fehler bei Akkord-Eingaben — siehe
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md). Lass für zuverlässiges
+> Verhalten Floating Range Above und Below auf jedem Split bei
+> `0`. Der Rest dieses Abschnitts beschreibt, was der smarte Split
+> *zu leisten versucht*; überspring ihn, wenn du nur harte Splits
+> brauchst.
+
+Jeder Splitpunkt hat eine **Floating Range Above** und **Floating
+Range Below** in Halbtönen. Beide auf `0` ergeben einen harten Split
+— Noten ab dem Splitpunkt aufwärts gehen in die obere Zone, darunter
+in die untere — und der Rest dieser README setzt das voraus.
+
+Auf ein paar Halbtöne gesetzt soll der Split jeder Hand unabhängig
+folgen: Jede Hand "hält" ihre Seite der Tastatur innerhalb der
+Floating Range, auch wenn ihre Noten kurz in die andere Zone
+hinüberreichen.
+
+Das Prinzip lässt sich gut am zweihändigen Orgelmuster zeigen.
+Stell dir vor, deine rechte Hand spielt `E4, D4, C4, H3` (MIDI-
+Noten `64, 62, 60, 59`), während die linke Hand zwischen jedem
+rechten Anschlag ein `E3` (Note `52`) tritt. Das Skript sieht
+also:
+
+```
+64, 52, 62, 52, 60, 52, 59
+```
+
+Mit einem **harten Split bei Note 60** (Floating Ranges `0 / 0`)
+landet das letzte `59` auf dem Untermanual — dein rechtes H springt
+mitten in der Phrase auf die falsche Manualreihe.
+
+Mit **Floating Range Above und Below auf 3** reicht jede Zone `3`
+Halbtöne über den Splitpunkt hinaus. Beide Zonen können die Noten
+zwischen `57` und `63` für sich beanspruchen, und es gewinnt die
+mit der näher liegenden letzten Note. Die rechte Hand bewegt sich
+um `60–64`; das `59` ist näher am rechten `60` als am linken `52`,
+und die Melodie bleibt geschlossen auf dem Obermanual.
+
+Dieser Teil funktioniert. Das ungelöste Problem sind Akkorde:
+"gleichzeitig" gespielte Noten werden über MIDI als Folge einzelner
+NoteOn-Events in unbestimmter Reihenfolge geliefert, und genau die
+gleiche Folge-der-Hand-Logik, die im monophonen Fall hilft,
+zerstreut die Stimmen eines Akkords über die Zonen. Siehe
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) für die Reproduktion und
+Details.
 
 ## Lizenz
 
@@ -211,9 +215,12 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
   = oben, UI Zone N+1 = Router-Zone 0 = unten. Das Wrapper-
   Skript übersetzt das in `rebuildCache`.) Jeder Splitpunkt hat eine
   Floating Range Above und Below (in Halbtönen).
-- Jede Zone hat eine **Claim Zone** in Tonhöhen:
-    - Zone 0: `(-∞, splitPoints[0] + above_0]`
-    - Zone k (Mitte): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`
+- Jede Zone hat eine **Claim Zone** in Tonhöhen. Die obere Grenze
+  einer unteren Zone ist `splitPoint + above` wenn `above > 0`, und
+  `splitPoint − 1` wenn `above = 0` — der Splitpunkt selbst gehört
+  also bei einem harten Split eindeutig zur oberen Zone:
+    - Zone 0: `(-∞, upperEdge_0]`
+    - Zone k (Mitte): `[splitPoints[k-1] − below_{k-1}, upperEdge_k]`
     - Zone N: `[splitPoints[N-1] − below_{N-1}, +∞)`
   Eine Zone kann eine Note nur dann für sich beanspruchen, wenn
   die Note in ihrer Claim Zone liegt — die Floating Range ist eine
@@ -235,11 +242,13 @@ Um das Plug-in einfach zu benutzen, brauchst du nichts davon.*
      als unendlich weit weg; bei Gleichstand gewinnt die höhere
      Zone.
 - **Harter Split** ist derselbe Algorithmus mit beiden Ranges eines
-  Splits auf 0: Die Claim Zones der zwei angrenzenden Zonen
-  berühren sich am Splitpunkt ohne Überlappung (außer am Splitpunkt
-  selbst, den der Gleichstand-Mechanismus an die obere Zone gibt).
-  Harte und smarte Splits dürfen in einer Konfiguration gemischt
-  werden.
+  Splits auf 0: Die Claim Zone der unteren Zone endet bei
+  `splitPoint − 1`, die der oberen beginnt bei `splitPoint`, und
+  der Splitpunkt gehört eindeutig zur oberen Zone. Harte und
+  smarte Splits dürfen in einer Konfiguration gemischt werden, aber
+  der Smart-Split-Pfad (jeder Range > 0) ist experimentell und
+  routet Akkord-Eingaben bekanntermaßen falsch — siehe
+  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 - **Note-to-Channel-Zuordnung**: Ein `noteToChannel[0..127]`-Array
   merkt sich, auf welchem Kanal jedes Note On gesendet wurde, damit
   das passende Note Off immer auf demselben Kanal landet — auch wenn

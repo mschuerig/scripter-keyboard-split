@@ -24,7 +24,7 @@ function bounds(splits, ranges) {
     for (let i = 0; i < N; i++) {
         const p = splits[idx[i]];
         const r = ranges[idx[i]];
-        hi[i] = p + r.above;
+        hi[i] = r.above > 0 ? p + r.above : p - 1;
         lo[i + 1] = p - r.below;
     }
     return [lo, hi];
@@ -150,6 +150,17 @@ describe("routeNote — hard split (ranges = 0)", () => {
         // R0: upper's claim zone is [60, ∞), so 58 cannot be upper
         // no matter what lp_upper is.
         expect(routeNote(58, lo, hi, lp, -1)).toBe(0);
+    });
+
+    it("returns the split note to upper after a stray lower-zone note", () => {
+        // With a hard split, the split note belongs exclusively to
+        // the upper zone. After the user dips below the split (71 →
+        // lower) and comes back to the split (72), the boundary note
+        // must NOT be pulled into lower by the follow-the-hand bias:
+        // the user picked a hard split precisely to avoid that.
+        const lp = [null, null];
+        expect(runSequence([74, 72, 71, 72], [72], [R0], lp))
+            .toEqual([1, 1, 0, 1]);
     });
 });
 

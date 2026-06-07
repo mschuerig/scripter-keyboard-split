@@ -5,17 +5,12 @@
 A script for the **MainStage / Logic Pro Scripter plugin** that divides
 your MIDI keyboard into up to four zones and sends each to its own
 MIDI channel — so you can play, for example, the upper and lower manual
-of a Hammond organ on one keyboard, with a split that doesn't get in
-the way of two-handed playing. Add a third or fourth zone when you
-want a bass pedal zone, a lead patch, or a handful of keys dedicated to
-sound effects.
+of a Hammond organ on one keyboard. Add a third or fourth zone when
+you want a bass pedal zone, a lead patch, or a handful of keys
+dedicated to sound effects.
 
-> **Early-stage script.** Hard splits (Floating Range Above and Below
-> both set to `0`) should be rock-solid — that's just a fixed line on
-> the keyboard. The smart-split logic with nonzero floating ranges is
-> newer and can still surprise you in edge cases. If you hit
-> unexpected routing mid-phrase, the quickest workaround is to set
-> that split's Floating Range Above and Below to `0`.
+Each split is a fixed line on the keyboard: notes at or above the
+split point go to the upper zone, notes below go to the lower one.
 
 ## Why you might want it
 
@@ -23,14 +18,6 @@ sound effects.
   it draws one fixed line on the keyboard.
 - MainStage always sends splits to separate channel strips, even if they could
   and should be handled by a single plugin.
-
-Each split has a **Floating Range** above and below it. Set both to
-`0` for a classic hard split — a fixed line on the keyboard. Set them
-to a few semitones for a **smart split** that follows what each of
-your hands is doing independently: each hand "holds" its side of the
-keyboard within that floating range even when the notes briefly cross
-over into the other zone. You can mix hard and smart splits in the
-same setup.
 
 ## What you need
 
@@ -82,32 +69,31 @@ them.
 | **Zone N Channel** | The MIDI channel notes assigned to Zone N are sent on. Defaults: `1, 2, 3, 4` — Zone 1 (the topmost zone, typically the upper manual or the main melody hand) is on channel 1 by convention. |
 | **Zone N Transpose** | Shift Zone N up or down by whole octaves. Common choice for the bottom zone with a Hammond setup: `-1`, so your left hand at middle C plays the lower end of the lower manual. |
 | **Split Point N** | The note where split N divides the keyboard. `60` is middle C. A pitch equal to a split point goes to the zone above it. The numbering does not impose pitch order — if you set Split Point 2 above Split Point 1, the script sorts them internally. |
-| **Floating Range Above N / Floating Range Below N** | How many semitones above/below Split Point N the adjacent zones are allowed to claim. This is a hard upper bound on each zone's reach — a zone cannot extend past its floating range, no matter where its last-played note was. **Both set to 0** = a hard, fixed split. Larger numbers = each zone is willing to claim more pitches past the line, and the closer-last-pitch wins inside the overlap zone. |
+| **Floating Range Above N / Floating Range Below N** | **Experimental — leave both at `0`.** Nonzero values activate a "smart split" mode that lets each zone claim a few semitones past the line; that mode has known bugs with chord input. See [Experimental: floating ranges](#experimental-floating-ranges) at the end. |
 
 ### Sensible starting points
 
+In every example below, set both Floating Range Above and Floating
+Range Below to `0` on every split (a hard line). The smart-split
+behavior is experimental — see the section at the end.
+
 - **Hammond-style organ, two manuals** — Number of Splits `1 split
-  (2 zones)`, Split Point 1 `60`, Floating Range Above 1 = Floating
-  Range Below 1 = `3`. Defaults already give Zone 1 (upper manual)
-  channel `1`, Zone 2 (lower manual) channel `2`. Set Zone 2
-  Transpose to `-1`.
+  (2 zones)`, Split Point 1 `60`. Defaults already give Zone 1
+  (upper manual) channel `1`, Zone 2 (lower manual) channel `2`.
+  Set Zone 2 Transpose to `-1`.
 - **Piano right, bass left** — Number of Splits `1 split (2
-  zones)`, Split Point 1 around `48` (C below middle C), Floating
-  Range Above 1 = Floating Range Below 1 = `0` (hard split). Zone 2
+  zones)`, Split Point 1 around `48` (C below middle C). Zone 2
   Transpose `-1` or `-2` if needed.
 - **Hammond with a bass pedal zone** — Number of Splits `2 splits (3
   zones)`, Split Point 1 around `60` (between upper and lower
   manuals), Split Point 2 around `48` (between lower manual and
-  bass). For the manual split (Split 1) try Floating Range `3 / 3`;
-  for the bass split (Split 2) try Floating Range `0 / 0` — a hard
-  boundary so the bass never leaks up. Defaults give Zone 1 (upper
-  manual) channel `1`, Zone 2 (lower manual) channel `2`, Zone 3
-  (bass) channel `3`. Zone 3 Transpose `-2` if the bass patch sits
-  below where your hand falls.
+  bass). Defaults give Zone 1 (upper manual) channel `1`, Zone 2
+  (lower manual) channel `2`, Zone 3 (bass) channel `3`. Zone 3
+  Transpose `-2` if the bass patch sits below where your hand
+  falls.
 - **Sound effects on the top few keys** — set Split Point 1 to about
-  `96`–`108` (separating the FX zone from everything below), set its
-  floating ranges to `0 / 0` (hard line), and assign Zone 1's
-  channel to a separate FX instrument.
+  `96`–`108` (separating the FX zone from everything below) and
+  assign Zone 1's channel to a separate FX instrument.
 
 ## Setting up the receiving plugin
 
@@ -122,37 +108,6 @@ Zone row above.
 
 **For a multi-timbral sampler:** assign each sound to the channel of
 the zone that should trigger it.
-
-## A worked example: why a smart split matters
-
-Imagine your right hand walks a melody down — `E4, D4, C4, B3` (MIDI
-notes `64, 62, 60, 59`) — while your left hand pedals an `E3` (note
-`52`) between each right-hand note. So you actually play:
-
-```
-64, 52, 62, 52, 60, 52, 59
-```
-
-With a **hard split at note 60** (Floating Ranges `0 / 0`):
-- `64` → upper ✓
-- `52` → lower ✓
-- `62` → upper ✓
-- `52` → lower ✓
-- `60` → upper ✓
-- `52` → lower ✓
-- `59` → **lower** ✗ — your right-hand B suddenly jumps to the lower
-  manual mid-phrase.
-
-With **Floating Range Above and Below set to 3**, each zone's claim
-extends `3` semitones past the split — so both zones can claim the
-notes between `57` and `63`, and the one whose recent note is closer
-in semitones wins. The right hand has been hovering around `60–64`,
-so when the `59` comes in, it's closer to the right-hand `60` than to
-the left-hand `52`, and the melody stays intact on the upper manual.
-
-The same logic extends to more splits: each zone tracks its own
-recent note independently, so a left-hand walking bass below a chord
-voicing above a right-hand melody all hold their lanes.
 
 ## Troubleshooting
 
@@ -171,15 +126,60 @@ same channel even if the split moves. Hangs are rare — usually only
 if the script was started while a key was already held.
 
 **Notes occasionally jump to the wrong zone.**
-Try smaller Floating Ranges — the larger the range, the more the
-plugin is willing to claim past a split. If you mostly play distinct
-hand parts that never cross, set the floating ranges to `0` for that
-split.
+Make sure Floating Range Above and Below are both `0` on every
+split. Nonzero ranges activate experimental smart-split logic that
+has [known bugs](KNOWN_ISSUES.md) with chord input.
 
 **Where do I download the file?**
 The latest version of `scripter-keyboard-split.js` is in this
 repository's root. Use the GitHub "Raw" button to copy it, or
 download the repository as a ZIP.
+
+## Experimental: floating ranges
+
+> **Experimental and known buggy.** The smart-split logic activated
+> by nonzero Floating Ranges has open bugs around chord input — see
+> [KNOWN_ISSUES.md](KNOWN_ISSUES.md). For reliable behavior, leave
+> Floating Range Above and Below at `0` on every split. The rest of
+> this section describes what the smart split is *trying* to do;
+> skip it if you only need hard splits.
+
+Each split has a **Floating Range Above** and **Floating Range
+Below**, in semitones. With both at `0` the split is a hard line —
+notes at or above the split point go to the upper zone, below it
+to the lower one — and the rest of this README assumes that.
+
+Setting them to a few semitones is meant to make the split follow
+what each of your hands is doing: each hand "holds" its side of the
+keyboard within the floating range even when its notes briefly
+cross over into the other zone.
+
+The idea is best shown with the two-handed organ pattern. Imagine
+your right hand walks `E4, D4, C4, B3` (MIDI notes `64, 62, 60,
+59`) while your left hand pedals `E3` (note `52`) between each
+right-hand note, so the script sees:
+
+```
+64, 52, 62, 52, 60, 52, 59
+```
+
+With a **hard split at note 60** (Floating Ranges `0 / 0`) the
+final `59` lands on the lower manual — your right-hand B suddenly
+jumps mid-phrase.
+
+With **Floating Range Above and Below set to 3**, each zone's
+claim extends `3` semitones past the split. Both zones can claim
+the notes between `57` and `63`, and the one whose recent note is
+closer in semitones wins. The right hand has been hovering around
+`60–64`, so the `59` is closer to the right-hand `60` than to the
+left-hand `52`, and the melody stays intact on the upper manual.
+
+That part works. The unsolved problem is chord input: when you
+play several notes "at the same time", MIDI delivers them as a
+sequence of NoteOn events in unspecified order, and the same
+follow-the-hand logic that helps the monophonic case scatters
+chord voices across zones. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+for the reproduction and details.
 
 ## License
 
@@ -201,9 +201,12 @@ need any of this to use the plugin.*
   UI Zone N+1 = router zone 0 = bottom. The wrapper translates
   between them in `rebuildCache`.) Each split has a Floating Range
   Above and Below (in semitones).
-- Each zone has a **claim zone** in pitch:
-    - Zone 0: `(-∞, splitPoints[0] + above_0]`
-    - Zone k (middle): `[splitPoints[k-1] − below_{k-1}, splitPoints[k] + above_k]`
+- Each zone has a **claim zone** in pitch. The upper edge of a
+  lower zone is `splitPoint + above` when `above > 0`, and
+  `splitPoint − 1` when `above = 0` — so the split point itself
+  belongs to the upper zone unambiguously on a hard split:
+    - Zone 0: `(-∞, upperEdge_0]`
+    - Zone k (middle): `[splitPoints[k-1] − below_{k-1}, upperEdge_k]`
     - Zone N: `[splitPoints[N-1] − below_{N-1}, +∞)`
   A zone can claim a pitch only if the pitch lies within that claim
   zone — the floating range is a hard upper bound on how far the
@@ -223,10 +226,12 @@ need any of this to use the plugin.*
      semitones wins; zones with no last pitch are treated as
      infinitely far away; ties go to the higher zone index.
 - **Hard split** is the same algorithm with both ranges of a split
-  set to 0: the two adjacent zones' claim zones meet at the split
-  point with no overlap (except the split point itself, which the
-  tie-break sends to the upper zone). Hard and smart splits can be
-  mixed in the same configuration.
+  set to 0: the lower zone's claim ends at `splitPoint − 1`, the
+  upper zone's claim starts at `splitPoint`, and the split point
+  itself belongs unambiguously to the upper zone. Hard and smart
+  splits can be mixed in the same configuration, but the smart-
+  split path (any range > 0) is experimental and known to mis-
+  route chord input — see [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 - **Note-to-channel mapping**: a `noteToChannel[0..127]` array
   remembers which channel each Note On was sent on, so the matching
   Note Off always lands on the same channel even if the user has
